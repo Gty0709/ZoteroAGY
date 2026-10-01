@@ -2,15 +2,28 @@
 
 import zotero from "@zotero-plugin/eslint-config";
 
-export default zotero({
-  overrides: [
-    {
-      files: ["**/*.ts"],
-      rules: {
-        // We disable this rule here because the template
-        // contains some unused examples and variables
-        "@typescript-eslint/no-unused-vars": "off",
+export default [
+  {
+    ignores: [
+      "deploy.cjs",
+      "addon/content/mermaid.min.js",
+      "addon/content/katex.min.css",
+      "content/**",
+      ".scaffold/**",
+    ],
+  },
+  ...zotero({
+    overrides: [
+      {
+        files: ["**/*.ts", "**/*.js"],
+        rules: {
+          "@typescript-eslint/no-unused-vars": "off",
+          "@typescript-eslint/ban-ts-comment": "off",
+          "@typescript-eslint/no-explicit-any": "off",
+          "@typescript-eslint/no-require-imports": "off",
+          "no-empty": "off",
+        },
       },
-    },
-  ],
-});
+    ],
+  }),
+];

@@ -5,3 +5,10 @@ node_modules
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
+.scaffold
+content/
+addon/content/mermaid.min.js
+addon/content/katex.min.css
+deploy.cjs
+docs/
+

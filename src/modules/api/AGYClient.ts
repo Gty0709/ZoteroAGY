@@ -4,7 +4,9 @@ function getSubprocess(): any {
   if (SubprocessModule) return SubprocessModule;
   try {
     // @ts-ignore
-    SubprocessModule = ChromeUtils.importESModule("resource://gre/modules/Subprocess.sys.mjs").Subprocess;
+    SubprocessModule = ChromeUtils.importESModule(
+      "resource://gre/modules/Subprocess.sys.mjs",
+    ).Subprocess;
     return SubprocessModule;
   } catch (e) {
     try {
@@ -14,28 +16,37 @@ function getSubprocess(): any {
       SubprocessModule = scope.Subprocess;
       return SubprocessModule;
     } catch (e2) {
-      throw new Error("未能加载 Zotero Subprocess 模块: " + (e as any)?.message);
+      throw new Error(
+        "未能加载 Zotero Subprocess 模块: " + (e as any)?.message,
+      );
     }
   }
 }
 
 export class AGYClient {
   public static readonly AVAILABLE_MODELS = [
-    { id: 'gemini-3.8-flash-high', label: 'Gemini 3.8 Flash (High)' },
-    { id: 'gemini-3.8-flash-low', label: 'Gemini 3.8 Flash (Low)' },
-    { id: 'gemini-3.1-pro-high', label: 'Gemini 3.1 Pro (High)' },
-    { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (Thinking)' },
-    { id: 'claude-opus-4-6-thinking', label: 'Claude Opus 4.6 (Thinking)' },
-    { id: 'gpt-oss-120b-medium', label: 'GPT-OSS 120B (Medium)' },
+    { id: "gemini-3.8-flash-high", label: "Gemini 3.8 Flash (High)" },
+    { id: "gemini-3.8-flash-low", label: "Gemini 3.8 Flash (Low)" },
+    { id: "gemini-3.1-pro-high", label: "Gemini 3.1 Pro (High)" },
+    { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6 (Thinking)" },
+    { id: "claude-opus-4-6-thinking", label: "Claude Opus 4.6 (Thinking)" },
+    { id: "gpt-oss-120b-medium", label: "GPT-OSS 120B (Medium)" },
   ];
 
   static async findAgyPath(): Promise<string | null> {
     // 1. Check user preference override
-    const customPath = (Zotero.Prefs.get(`${addon.data.config.prefsPrefix}.cliPath`, true) as string)?.trim();
+    const customPath = (
+      Zotero.Prefs.get(
+        `${addon.data.config.prefsPrefix}.cliPath`,
+        true,
+      ) as string
+    )?.trim();
     if (customPath) {
       try {
         // @ts-ignore
-        const file = Components.classes["@mozilla.org/file/local;1"].createInstance(Components.interfaces.nsIFile);
+        const file = Components.classes[
+          "@mozilla.org/file/local;1"
+        ].createInstance(Components.interfaces.nsIFile);
         file.initWithPath(customPath);
         if (file.exists() && file.isFile()) return customPath;
       } catch (_) {}
@@ -44,7 +55,9 @@ export class AGYClient {
     // 2. Search PATH
     try {
       const Subprocess = getSubprocess();
-      const inPath = await Subprocess.pathSearch(Zotero.isWin ? "agy.exe" : "agy");
+      const inPath = await Subprocess.pathSearch(
+        Zotero.isWin ? "agy.exe" : "agy",
+      );
       if (inPath) return inPath;
     } catch (_) {}
 
@@ -52,7 +65,10 @@ export class AGYClient {
     if (Zotero.isWin) {
       try {
         // @ts-ignore
-        const home = Services.dirsvc.get("Home", Components.interfaces.nsIFile).path;
+        const home = Services.dirsvc.get(
+          "Home",
+          Components.interfaces.nsIFile,
+        ).path;
         const candidates = [
           home + "\\AppData\\Local\\agy\\bin\\agy.exe",
           home + "\\AppData\\Local\\Programs\\agy\\bin\\agy.exe",
@@ -61,7 +77,9 @@ export class AGYClient {
         for (const cand of candidates) {
           try {
             // @ts-ignore
-            const file = Components.classes["@mozilla.org/file/local;1"].createInstance(Components.interfaces.nsIFile);
+            const file = Components.classes[
+              "@mozilla.org/file/local;1"
+            ].createInstance(Components.interfaces.nsIFile);
             file.initWithPath(cand);
             if (file.exists() && file.isFile()) return cand;
           } catch (_) {}
@@ -73,7 +91,10 @@ export class AGYClient {
     if (!Zotero.isWin) {
       try {
         // @ts-ignore
-        const home = Services.dirsvc.get("Home", Components.interfaces.nsIFile).path;
+        const home = Services.dirsvc.get(
+          "Home",
+          Components.interfaces.nsIFile,
+        ).path;
         const candidates = [
           home + "/.local/bin/agy",
           "/usr/local/bin/agy",
@@ -82,7 +103,9 @@ export class AGYClient {
         for (const cand of candidates) {
           try {
             // @ts-ignore
-            const file = Components.classes["@mozilla.org/file/local;1"].createInstance(Components.interfaces.nsIFile);
+            const file = Components.classes[
+              "@mozilla.org/file/local;1"
+            ].createInstance(Components.interfaces.nsIFile);
             file.initWithPath(cand);
             if (file.exists() && file.isFile()) return cand;
           } catch (_) {}
@@ -93,11 +116,19 @@ export class AGYClient {
     return null;
   }
 
-  static async checkCLIStatus(): Promise<{ available: boolean; path: string | null; error?: string }> {
+  static async checkCLIStatus(): Promise<{
+    available: boolean;
+    path: string | null;
+    error?: string;
+  }> {
     try {
       const agyPath = await AGYClient.findAgyPath();
       if (!agyPath) {
-        return { available: false, path: null, error: "未检测到 agy.exe，请确认安装或在设置中配置路径" };
+        return {
+          available: false,
+          path: null,
+          error: "未检测到 agy.exe，请确认安装或在设置中配置路径",
+        };
       }
       return { available: true, path: agyPath };
     } catch (e: any) {
@@ -108,11 +139,13 @@ export class AGYClient {
   static async sendMessageStream(
     prompt: string,
     onChunk: (text: string, done: boolean) => void,
-    conversationId?: string
+    conversationId?: string,
   ): Promise<{ response: string; agyConversationId?: string }> {
     const agyPath = await AGYClient.findAgyPath();
     if (!agyPath) {
-      throw new Error("未检测到 Antigravity CLI (agy.exe)。请确认已安装并在首选项设置中指定正确路径。");
+      throw new Error(
+        "未检测到 Antigravity CLI (agy.exe)。请确认已安装并在首选项设置中指定正确路径。",
+      );
     }
 
     const Subprocess = getSubprocess();
@@ -123,10 +156,12 @@ export class AGYClient {
       args.push("--conversation", conversationId);
     }
     args.push(
-      "--model", model,
-      "--output-format", "stream-json",
+      "--model",
+      model,
+      "--output-format",
+      "stream-json",
       "--dangerously-skip-permissions",
-      "--disable-slash-commands"
+      "--disable-slash-commands",
     );
 
     const proc = await Subprocess.call({
@@ -183,7 +218,11 @@ export class AGYClient {
         if (data.event === "step_update" && data.step_update?.text_delta) {
           fullResponse += data.step_update.text_delta;
           onChunk(data.step_update.text_delta, false);
-        } else if (data.event === "result" && data.result?.response && !fullResponse) {
+        } else if (
+          data.event === "result" &&
+          data.result?.response &&
+          !fullResponse
+        ) {
           fullResponse = data.result.response;
           onChunk(fullResponse, false);
         }
@@ -193,25 +232,42 @@ export class AGYClient {
     const { exitCode } = await proc.wait();
     if (exitCode !== 0 && !fullResponse) {
       let stderr = "";
-      try { stderr = await proc.stderr.readString(); } catch (_) {}
-      throw new Error(`Antigravity CLI 执行失败 (exit ${exitCode}): ${stderr || '未收到有效输出'}`);
+      try {
+        stderr = await proc.stderr.readString();
+      } catch (_) {}
+      throw new Error(
+        `Antigravity CLI 执行失败 (exit ${exitCode}): ${stderr || "未收到有效输出"}`,
+      );
     }
 
     onChunk("", true);
-    return { response: fullResponse, agyConversationId: capturedAgyConvId || undefined };
+    return {
+      response: fullResponse,
+      agyConversationId: capturedAgyConvId || undefined,
+    };
   }
 
   static getModel(): string {
-    return (Zotero.Prefs.get(`${addon.data.config.prefsPrefix}.model`, true) as string) || 'gemini-3.8-flash-high';
+    return (
+      (Zotero.Prefs.get(
+        `${addon.data.config.prefsPrefix}.model`,
+        true,
+      ) as string) || "gemini-3.8-flash-high"
+    );
   }
 
   static setModel(model: string): void {
     Zotero.Prefs.set(`${addon.data.config.prefsPrefix}.model`, model, true);
   }
 
-  static async sendMessage(input: string | Array<{ role: string; content: string }>): Promise<string> {
-    const prompt = typeof input === 'string' ? input : input[input.length - 1]?.content || '';
-    let full = '';
+  static async sendMessage(
+    input: string | Array<{ role: string; content: string }>,
+  ): Promise<string> {
+    const prompt =
+      typeof input === "string"
+        ? input
+        : input[input.length - 1]?.content || "";
+    let full = "";
     const res = await AGYClient.sendMessageStream(prompt, (chunk) => {
       full += chunk;
     });

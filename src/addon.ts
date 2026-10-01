@@ -5,7 +5,7 @@ import { createZToolkit } from "./utils/ztoolkit";
 
 export interface ChatMessage {
   id: string;
-  role: 'user' | 'assistant' | 'system';
+  role: "user" | "assistant" | "system";
   content: string;
   timestamp: number;
   contexts?: ContextItem[];
@@ -22,7 +22,7 @@ export interface Conversation {
 
 export interface ContextItem {
   id: string;
-  type: 'selection' | 'annotation' | 'abstract' | 'title';
+  type: "selection" | "annotation" | "abstract" | "title";
   text: string;
   source?: string;
   page?: number;
@@ -40,7 +40,11 @@ class Addon {
     initialized?: boolean;
     ztoolkit: ZToolkit;
     locale?: { current: any };
-    prefs?: { window: Window; columns: Array<ColumnOptions>; rows: Array<{ [dataKey: string]: string }> };
+    prefs?: {
+      window: Window;
+      columns: Array<ColumnOptions>;
+      rows: Array<{ [dataKey: string]: string }>;
+    };
     dialog?: DialogHelper;
     chat: {
       conversations: Map<string, Conversation>;
@@ -59,9 +63,16 @@ class Addon {
 
   constructor() {
     this.data = {
-      alive: true, config, env: __env__, initialized: false,
+      alive: true,
+      config,
+      env: __env__,
+      initialized: false,
       ztoolkit: createZToolkit(),
-      chat: { conversations: new Map(), activeConversationId: null, contexts: [] },
+      chat: {
+        conversations: new Map(),
+        activeConversationId: null,
+        contexts: [],
+      },
       auth: { accessToken: null, refreshToken: null, userInfo: null },
       sidebar: { browser: null, visible: false },
     };

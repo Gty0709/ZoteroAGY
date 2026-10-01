@@ -1,4 +1,4 @@
-import { ChatView, AGYPanelInstance } from '../chat/ChatView';
+import { ChatView, AGYPanelInstance } from "../chat/ChatView";
 
 export class StandaloneWindow {
   private static win: Window | null = null;
@@ -14,17 +14,23 @@ export class StandaloneWindow {
       return this.win!;
     }
 
-    const keepOnTop = Zotero.Prefs.get(`${addon.data.config.prefsPrefix}.keepWindowTop`, true) !== false;
+    const keepOnTop =
+      Zotero.Prefs.get(
+        `${addon.data.config.prefsPrefix}.keepWindowTop`,
+        true,
+      ) !== false;
     const features = [
-      'chrome',
-      'extrachrome',
-      'menubar=no',
-      'resizable=yes',
-      'scrollbars=no',
-      'status=no',
-      'dialog=no',
-      keepOnTop ? 'alwaysRaised=yes' : '',
-    ].filter(Boolean).join(',');
+      "chrome",
+      "extrachrome",
+      "menubar=no",
+      "resizable=yes",
+      "scrollbars=no",
+      "status=no",
+      "dialog=no",
+      keepOnTop ? "alwaysRaised=yes" : "",
+    ]
+      .filter(Boolean)
+      .join(",");
 
     const dialogData = {
       loadLock: (Zotero.Promise as any).defer(),
@@ -35,14 +41,16 @@ export class StandaloneWindow {
       `chrome://${addon.data.config.addonRef}/content/standalone.xhtml`,
       `${addon.data.config.addonRef}-standalone`,
       features,
-      dialogData
+      dialogData,
     );
 
     this.win = win;
 
     await dialogData.loadLock.promise;
 
-    const root = win.document.getElementById('zoteroagy-standalone-root') as HTMLElement;
+    const root = win.document.getElementById(
+      "zoteroagy-standalone-root",
+    ) as HTMLElement;
     if (root) {
       // Build AGY panel in standalone window
       this.panelInstance = ChatView.createPanel(win.document, true);
@@ -52,7 +60,7 @@ export class StandaloneWindow {
       ChatView.updateAuthStatusForPanel(this.panelInstance);
     }
 
-    win.addEventListener('unload', () => {
+    win.addEventListener("unload", () => {
       if (this.panelInstance) {
         ChatView.removePanel(this.panelInstance);
         this.panelInstance = null;
@@ -65,34 +73,54 @@ export class StandaloneWindow {
   }
 
   public static async togglePin(): Promise<void> {
-    const current = Zotero.Prefs.get(`${addon.data.config.prefsPrefix}.keepWindowTop`, true) !== false;
+    const current =
+      Zotero.Prefs.get(
+        `${addon.data.config.prefsPrefix}.keepWindowTop`,
+        true,
+      ) !== false;
     const next = !current;
-    Zotero.Prefs.set(`${addon.data.config.prefsPrefix}.keepWindowTop`, next, true);
+    Zotero.Prefs.set(
+      `${addon.data.config.prefsPrefix}.keepWindowTop`,
+      next,
+      true,
+    );
 
     if (this.isOpen() && this.win) {
       let applied = false;
       try {
-        // @ts-ignore
-        const xulWin = this.win.docShell?.treeOwner?.QueryInterface(Components.interfaces.nsIInterfaceRequestor)
-          // @ts-ignore
-          ?.getInterface(Components.interfaces.nsIXULWindow);
-        if (xulWin) {
-          // @ts-ignore
-          xulWin.zLevel = next ? Components.interfaces.nsIXULWindow.raisedZ : Components.interfaces.nsIXULWindow.normalZ;
+        const ifaces = (Components as any)?.interfaces;
+        const treeOwner = (this.win as any)?.docShell?.treeOwner;
+        const xulWin = treeOwner
+          ?.QueryInterface?.(ifaces?.nsIInterfaceRequestor)
+          ?.getInterface?.(ifaces?.nsIXULWindow);
+        if (xulWin && ifaces?.nsIXULWindow) {
+          xulWin.zLevel = next
+            ? ifaces.nsIXULWindow.raisedZ
+            : ifaces.nsIXULWindow.normalZ;
           applied = true;
         }
       } catch (e) {}
 
       // Update button visual
       if (this.panelInstance?.pinButton) {
-        this.panelInstance.pinButton.textContent = next ? '📌 已置顶' : '📍 未置顶';
-        this.panelInstance.pinButton.style.color = next ? '#188038' : '#666';
-        this.panelInstance.pinButton.style.borderColor = next ? '#188038' : 'rgba(0,0,0,0.18)';
-        this.panelInstance.pinButton.title = next ? '当前状态：已置顶在屏幕最前端（点击取消置顶）' : '当前状态：未置顶（点击开启屏幕置顶）';
+        this.panelInstance.pinButton.textContent = next
+          ? "📌 已置顶"
+          : "📍 未置顶";
+        this.panelInstance.pinButton.style.color = next ? "#188038" : "#666";
+        this.panelInstance.pinButton.style.borderColor = next
+          ? "#188038"
+          : "rgba(0,0,0,0.18)";
+        this.panelInstance.pinButton.title = next
+          ? "当前状态：已置顶在屏幕最前端（点击取消置顶）"
+          : "当前状态：未置顶（点击开启屏幕置顶）";
       }
 
       new ztoolkit.ProgressWindow(addon.data.config.addonName)
-        .createLine({ text: next ? '📌 已开启独立窗口置顶' : '📍 已取消置顶', type: 'default', progress: 100 })
+        .createLine({
+          text: next ? "📌 已开启独立窗口置顶" : "📍 已取消置顶",
+          type: "default",
+          progress: 100,
+        })
         .show(2000);
 
       if (!applied) {

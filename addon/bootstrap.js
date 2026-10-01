@@ -8,16 +8,25 @@
 function bootLog(msg) {
   try {
     try {
-      if (typeof Zotero !== 'undefined' && Zotero.debug) Zotero.debug("[AGY-BOOT] " + msg);
+      if (typeof Zotero !== "undefined" && Zotero.debug)
+        Zotero.debug("[AGY-BOOT] " + msg);
     } catch (_) {}
     try {
-      const file = Components.classes["@mozilla.org/file/local;1"].createInstance(Components.interfaces.nsIFile);
+      const file = Components.classes[
+        "@mozilla.org/file/local;1"
+      ].createInstance(Components.interfaces.nsIFile);
       file.initWithPath("C:\\Users\\Administrator\\agy_debug.log");
-      const foStream = Components.classes["@mozilla.org/network/file-output-stream;1"].createInstance(Components.interfaces.nsIFileOutputStream);
+      const foStream = Components.classes[
+        "@mozilla.org/network/file-output-stream;1"
+      ].createInstance(Components.interfaces.nsIFileOutputStream);
       foStream.init(file, 0x02 | 0x08 | 0x10, 0o666, 0);
-      const converter = Components.classes["@mozilla.org/intl/converter-output-stream;1"].createInstance(Components.interfaces.nsIConverterOutputStream);
+      const converter = Components.classes[
+        "@mozilla.org/intl/converter-output-stream;1"
+      ].createInstance(Components.interfaces.nsIConverterOutputStream);
       converter.init(foStream, "UTF-8", 0, 0);
-      converter.writeString("[BOOT " + new Date().toISOString() + "] " + msg + "\r\n");
+      converter.writeString(
+        "[BOOT " + new Date().toISOString() + "] " + msg + "\r\n",
+      );
       converter.close();
     } catch (e) {}
   } catch (e) {}
@@ -30,7 +39,9 @@ function install(data, reason) {
 }
 
 async function startup({ id, version, resourceURI, rootURI }, reason) {
-  bootLog("startup called! id=" + id + ", rootURI=" + rootURI + ", reason=" + reason);
+  bootLog(
+    "startup called! id=" + id + ", rootURI=" + rootURI + ", reason=" + reason,
+  );
   try {
     var aomStartup = Components.classes[
       "@mozilla.org/addons/addon-manager-startup;1"
@@ -48,7 +59,12 @@ async function startup({ id, version, resourceURI, rootURI }, reason) {
       `${rootURI}/content/scripts/__addonRef__.js`,
       ctx,
     );
-    bootLog("Subscript loaded! Zotero.__addonInstance__ = " + (typeof Zotero !== 'undefined' ? typeof Zotero.__addonInstance__ : 'undefined'));
+    bootLog(
+      "Subscript loaded! Zotero.__addonInstance__ = " +
+        (typeof Zotero !== "undefined"
+          ? typeof Zotero.__addonInstance__
+          : "undefined"),
+    );
     await Zotero.__addonInstance__.hooks.onStartup();
     bootLog("hooks.onStartup finished!");
   } catch (err) {
@@ -57,7 +73,10 @@ async function startup({ id, version, resourceURI, rootURI }, reason) {
 }
 
 async function onMainWindowLoad({ window }, reason) {
-  bootLog("onMainWindowLoad called! window=" + (window ? window.document?.title : "null"));
+  bootLog(
+    "onMainWindowLoad called! window=" +
+      (window ? window.document?.title : "null"),
+  );
   try {
     await Zotero.__addonInstance__?.hooks.onMainWindowLoad(window);
     bootLog("hooks.onMainWindowLoad finished!");
