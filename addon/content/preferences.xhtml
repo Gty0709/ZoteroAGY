@@ -1,33 +1,47 @@
 <linkset>
   <html:link rel="localization" href="__addonRef__-preferences.ftl" />
 </linkset>
-<groupbox
-  onload="Zotero.__addonInstance__.hooks.onPrefsEvent('load', { window })"
->
-  <label><html:h2 data-l10n-id="pref-title"></html:h2></label>
-  <checkbox
-    id="zotero-prefpane-__addonRef__-enable"
-    preference="enable"
-    data-l10n-id="pref-enable"
-  />
-  <hbox>
-    <html:label
-      for="zotero-prefpane-__addonRef__-input"
-      data-l10n-id="pref-input"
-    ></html:label>
+<groupbox>
+  <label><html:h2>ZoteroAGY 配置 (Antigravity CLI)</html:h2></label>
+
+  <vbox style="margin-bottom: 15px;">
+    <html:label for="zotero-prefpane-__addonRef__-cliPath">Antigravity CLI (agy.exe) 路径:</html:label>
     <html:input
       type="text"
-      id="zotero-prefpane-__addonRef__-input"
-      preference="input"
-    ></html:input>
-  </hbox>
-  <hbox class="virtualized-table-container" flex="1" height="300px">
-    <html:div id="__addonRef__-table-container" />
-  </hbox>
+      id="zotero-prefpane-__addonRef__-cliPath"
+      preference="cliPath"
+      placeholder="留空自动检测 (例如: C:\Users\Administrator\AppData\Local\agy\bin\agy.exe)"
+      style="width: 100%; padding: 6px; margin-top: 4px;"
+    />
+    <html:p style="color: #666; font-size: 12px; margin-top: 2px;">
+      对话直接调用本地 Antigravity CLI，自动复用本地已登录的凭据，无需手动申请或填写 API Key。
+    </html:p>
+  </vbox>
+
+  <vbox style="margin-bottom: 15px;">
+    <html:label for="zotero-prefpane-__addonRef__-model">默认 AI 模型 (Model):</html:label>
+    <html:select
+      id="zotero-prefpane-__addonRef__-model"
+      preference="model"
+      style="width: 100%; padding: 6px; margin-top: 4px;"
+    >
+      <html:option value="gemini-3.8-flash-high">Gemini 3.8 Flash (High) - 推荐</html:option>
+      <html:option value="gemini-3.8-flash-low">Gemini 3.8 Flash (Low) - 极速</html:option>
+      <html:option value="gemini-3.1-pro-high">Gemini 3.1 Pro (High) - 深度推理</html:option>
+      <html:option value="claude-sonnet-4-6">Claude Sonnet 4.6 (Thinking)</html:option>
+      <html:option value="claude-opus-4-6-thinking">Claude Opus 4.6 (Thinking)</html:option>
+      <html:option value="gpt-oss-120b-medium">GPT-OSS 120B (Medium)</html:option>
+    </html:select>
+    <html:p style="color: #666; font-size: 12px; margin-top: 2px;">
+      也可以在侧边栏对话面板底部随时快速切换模型。
+    </html:p>
+  </vbox>
+
+  <vbox style="margin-bottom: 15px;">
+    <checkbox
+      id="zotero-prefpane-__addonRef__-autoContext"
+      preference="autoContext"
+      label="右键文献时自动将标题与摘要加入对话上下文"
+    />
+  </vbox>
 </groupbox>
-<vbox>
-  <html:label
-    data-l10n-id="pref-help"
-    data-l10n-args='{"time": "__buildTime__","name": "__addonName__","version":"__buildVersion__"}'
-  ></html:label>
-</vbox>

@@ -1,2 +1,11 @@
-pref("enable", true);
-pref("input", "This is input");
+pref('extensions.zotero.zoteroagy.cliPath', '');
+pref('extensions.zotero.zoteroagy.model', 'gemini-3.8-flash-high');
+pref('extensions.zotero.zoteroagy.language', 'zh-CN');
+pref('extensions.zotero.zoteroagy.autoContext', true);
+pref('extensions.zotero.zoteroagy.saveHistory', true);
+pref('extensions.zotero.zoteroagy.maxHistoryLength', 50);
+pref('extensions.zotero.zoteroagy.theme', 'auto');
+pref('extensions.zotero.zoteroagy.fontSize', 14);
+pref('extensions.zotero.zoteroagy.conversations', '[]');
+pref('extensions.zotero.zoteroagy.customTemplates', '[]');
+pref('extensions.zotero.zoteroagy.keepWindowTop', true);

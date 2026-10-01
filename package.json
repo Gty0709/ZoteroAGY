@@ -1,24 +1,21 @@
 {
-  "name": "zotero-plugin-template",
+  "name": "zotero-agy",
   "type": "module",
-  "version": "3.1.0",
-  "description": "Zotero Plugin Template",
+  "version": "1.1.1",
+  "description": "AI Research Assistant for Zotero - Powered by Antigravity",
   "config": {
-    "addonName": "Zotero Plugin Template",
-    "addonID": "addontemplate@euclpts.com",
-    "addonRef": "addontemplate",
-    "addonInstance": "AddonTemplate",
-    "prefsPrefix": "extensions.zotero.addontemplate"
+    "addonName": "Zotero AGY",
+    "addonID": "zotero-agy@antigravity.org",
+    "addonRef": "zoteroagy",
+    "addonInstance": "ZoteroAGY",
+    "prefsPrefix": "extensions.zotero.zoteroagy"
   },
+  "author": "Gty0709",
+  "homepage": "https://github.com/Gty0709/ZoteroAGY#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/windingwind/zotero-plugin-template.git"
+    "url": "git+https://github.com/Gty0709/ZoteroAGY.git"
   },
-  "author": "windingwind",
-  "bugs": {
-    "url": "https://github.com/windingwind/zotero-plugin-template/issues"
-  },
-  "homepage": "https://github.com/windingwind/zotero-plugin-template#readme",
   "license": "AGPL-3.0-or-later",
   "scripts": {
     "start": "zotero-plugin serve",
@@ -30,10 +27,13 @@
     "update-deps": "npm update --save"
   },
   "dependencies": {
+    "katex": "^0.18.10",
+    "marked": "^18.0.14",
     "zotero-plugin-toolkit": "^5.1.0-beta.13"
   },
   "devDependencies": {
     "@types/chai": "^5.2.3",
+    "@types/katex": "^0.16.8",
     "@types/mocha": "^10.0.10",
     "@types/node": "^24.10.0",
     "@zotero-plugin/eslint-config": "^0.6.7",

@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<!DOCTYPE window>
+<?xml-stylesheet href="chrome://global/skin/" type="text/css"?>
+<?xml-stylesheet href="chrome://zotero/skin/zotero.css" type="text/css"?>
+<?xml-stylesheet href="chrome://zotero-platform/content/zotero.css" type="text/css"?>
+<?xml-stylesheet href="chrome://zoteroagy/content/katex.min.css" type="text/css"?>
+<?xml-stylesheet href="chrome://zoteroagy/content/zoteroPane.css" type="text/css"?>
+
+<window
+  id="zoteroagy-standalone"
+  title="AGY 智能助手 (Antigravity)"
+  xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+  xmlns:xul="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+  xmlns:html="http://www.w3.org/1999/xhtml"
+  windowtype="zoteroagy:standalone"
+  persist="screenX screenY width height"
+  width="480"
+  height="720"
+  onload="if (window.arguments &amp;&amp; window.arguments[0] &amp;&amp; window.arguments[0].loadLock) window.arguments[0].loadLock.resolve();"
+>
+  <html:script src="chrome://zoteroagy/content/mermaid.min.js"></html:script>
+  <html:div id="zoteroagy-standalone-root" style="height: 100%; width: 100%; display: flex; flex-direction: column; box-sizing: border-box; background: var(--material-background, #f9f9fa); overflow: hidden;"></html:div>
+</window>

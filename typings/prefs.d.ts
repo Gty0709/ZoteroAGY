@@ -7,8 +7,17 @@
 declare namespace _ZoteroTypes {
   interface Prefs {
     PluginPrefsMap: {
-      "enable": boolean;
-      "input": string;
+      "cliPath": string;
+      "model": string;
+      "language": string;
+      "autoContext": boolean;
+      "saveHistory": boolean;
+      "maxHistoryLength": number;
+      "theme": string;
+      "fontSize": number;
+      "conversations": string;
+      "customTemplates": string;
+      "keepWindowTop": boolean;
     };
   }
 }
