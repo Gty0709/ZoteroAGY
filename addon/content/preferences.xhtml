@@ -1,20 +1,55 @@
 <linkset>
   <html:link rel="localization" href="__addonRef__-preferences.ftl" />
 </linkset>
-<groupbox>
+<groupbox
+  onload="Zotero.__addonInstance__.hooks.onPrefsEvent('load', { window })"
+>
   <label><html:h2>ZoteroAGY 配置 (Antigravity CLI)</html:h2></label>
 
-  <vbox style="margin-bottom: 15px;">
-    <html:label for="zotero-prefpane-__addonRef__-cliPath">Antigravity CLI (agy.exe) 路径:</html:label>
-    <html:input
-      type="text"
-      id="zotero-prefpane-__addonRef__-cliPath"
-      preference="cliPath"
-      placeholder="留空自动检测 (例如: C:\Users\Administrator\AppData\Local\agy\bin\agy.exe)"
-      style="width: 100%; padding: 6px; margin-top: 4px;"
+  <vbox style="margin-bottom: 16px;">
+    <html:label
+      for="zotero-prefpane-__addonRef__-cliPath"
+      id="zotero-prefpane-__addonRef__-cliPath-label"
+      style="font-weight: 600;"
+    >
+      Antigravity CLI 路径:
+    </html:label>
+    <hbox style="display: flex; gap: 8px; align-items: center; margin-top: 6px;">
+      <html:input
+        type="text"
+        id="zotero-prefpane-__addonRef__-cliPath"
+        preference="cliPath"
+        placeholder="留空自动检测 (例如: ~/.local/bin/agy 或 agy.exe 路径)"
+        style="flex: 1; min-width: 0; padding: 6px 8px;"
+      />
+      <html:button
+        type="button"
+        id="zotero-prefpane-__addonRef__-autoDetectBtn"
+        style="padding: 6px 12px; cursor: pointer; white-space: nowrap;"
+      >
+        🔍 自动寻找
+      </html:button>
+      <html:button
+        type="button"
+        id="zotero-prefpane-__addonRef__-browseBtn"
+        style="padding: 6px 12px; cursor: pointer; white-space: nowrap;"
+      >
+        📁 手动选择
+      </html:button>
+      <html:button
+        type="button"
+        id="zotero-prefpane-__addonRef__-testBtn"
+        style="padding: 6px 12px; cursor: pointer; white-space: nowrap;"
+      >
+        ⚡ 测试连接
+      </html:button>
+    </hbox>
+    <html:div
+      id="zotero-prefpane-__addonRef__-statusBox"
+      style="display: none; margin-top: 8px; padding: 8px 12px; border-radius: 4px; font-size: 12px; line-height: 1.4;"
     />
-    <html:p style="color: #666; font-size: 12px; margin-top: 2px;">
-      对话直接调用本地 Antigravity CLI，自动复用本地已登录的凭据，无需手动申请或填写 API Key。
+    <html:p style="color: #666; font-size: 12px; margin-top: 4px;">
+      对话直接调用本地 Antigravity CLI，自动复用本地已登录的凭据与模型，无需手动申请或填写 API Key。
     </html:p>
   </vbox>
 

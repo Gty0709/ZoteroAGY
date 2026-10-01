@@ -30,10 +30,11 @@ export class OAuthManager {
 
   static async login(): Promise<void> {
     const status = await AGYClient.checkCLIStatus();
+    const binName = AGYClient.getBinName();
     if (status.available) {
       new ztoolkit.ProgressWindow(addon.data.config.addonName)
         .createLine({
-          text: `✅ Antigravity CLI 已就绪: ${status.path}`,
+          text: `✅ Antigravity CLI (${binName}) 已就绪: ${status.path}`,
           type: "default",
           progress: 100,
         })
@@ -41,7 +42,7 @@ export class OAuthManager {
     } else {
       new ztoolkit.ProgressWindow(addon.data.config.addonName)
         .createLine({
-          text: `⚠️ 未检测到 agy.exe: ${status.error || ""}`,
+          text: `⚠️ 未检测到 ${binName}: ${status.error || ""}`,
           type: "error",
           progress: 100,
         })

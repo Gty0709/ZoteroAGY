@@ -164,7 +164,7 @@ flowchart TD
 1. **Verify Antigravity CLI**:
    - Ensure `agy` is installed and available in your terminal (`agy --version`).
    - Open Zotero 7 and expand the AGY panel on the right. A green `🟢 AGY CLI` badge indicates ready status.
-   - _(If `🔴 CLI Not Found` appears, click it to specify the absolute path to `agy.exe` in Preferences)._
+   - _(If `🔴 CLI Not Found` appears, open Settings -> ZoteroAGY and click **"🔍 自动寻找"** to auto-detect, or **"📁 手动选择"** to pick your binary)._
 
 2. **Start Researching**:
    - Open any PDF article. Highlight key arguments or formulas and click **"Add to AGY"**.
@@ -180,12 +180,17 @@ flowchart TD
 
 Open Zotero Preferences: **Edit** -> **Preferences** -> **ZoteroAGY**:
 
-| Setting                  | Default                           | Description                                               |
-| :----------------------- | :-------------------------------- | :-------------------------------------------------------- |
-| **Antigravity CLI Path** | Auto-detected (`agy` / `agy.exe`) | Custom path if `agy` is not in system PATH                |
-| **Default Model**        | `gemini-2.5-flash`                | Select between `gemini-2.5-flash`, `gemini-2.5-pro`, etc. |
-| **Always on Top**        | Enabled (`true`)                  | Whether standalone floating window stays on top           |
-| **Default Font Size**    | `14px`                            | Base font size (12px ~ 28px)                              |
+| Setting                  | Default                           | Description                                                            |
+| :----------------------- | :-------------------------------- | :--------------------------------------------------------------------- |
+| **Antigravity CLI Path** | Auto-detected (`agy` / `agy.exe`) | Supports 1-click **Auto-Detect**, native **File Picker**, and **Test** |
+| **Default Model**        | `gemini-3.8-flash-high`           | Select between Gemini 3.8, Gemini 3.1 Pro, Claude, etc.                |
+| **Always on Top**        | Enabled (`true`)                  | Whether standalone floating window stays on top                        |
+| **Default Font Size**    | `14px`                            | Base font size (12px ~ 28px)                                           |
+
+- 🐧 **Linux Native Support**: Fully adapted for Linux desktop environments (auto-detects `~/.local/bin/agy`, `~/.gemini/antigravity/bin/agy`, `/usr/local/bin/agy`, Flatpak/Snap, with shell PATH fallbacks).
+- 🔍 **Auto-Detect (自动寻找)**: Automatically scans system paths and common installation locations for the CLI.
+- 📁 **Manual Select (手动选择)**: Opens native OS file dialog (`nsIFilePicker`) to select the executable.
+- ⚡ **Test Connection (测试连接)**: Verifies CLI execution and displays detected version badge.
 
 ---
 
@@ -238,7 +243,9 @@ This project is licensed under the [GNU Affero General Public License v3.0 or la
 
 **Zotero AGY** 是专为 **Zotero 7** 打造的深度学术研究与文献精读 AI 插件。
 
-- ⚡ **无 API Key 限制**：由本地 **Antigravity CLI (`agy`)** 原生驱动，畅享前沿模型生态（Gemini 2.5 Pro / Flash、Claude 3.7 等），打字机极速流式响应。
+- ⚡ **无 API Key 限制**：由本地 **Antigravity CLI (`agy`)** 原生驱动，畅享前沿模型生态（Gemini 3.8 / 3.1 Pro、Claude Sonnet/Opus 等），打字机极速流式响应。
+- 🐧 **Linux 本机原生适配**：深度适配 Linux 桌面环境与环境变量，全面覆盖 `~/.local/bin/agy`、`~/.gemini/antigravity/bin/agy`、`/usr/local/bin` 等目录与 shell 回退检测。
+- 🛠️ **全能首选项配置**：支持「🔍 自动寻找」一键探测 CLI、支持原生「📁 手动选择」文件选择器，并提供实时「⚡ 测试连接」与版本状态显示。
 - 📑 **PDF 划词与批注卡片双向联动**：阅读器划选一键带入上下文、左侧高亮批注卡片「`✦`」快速引用、AI 解答一键「💬 填入批注卡片」反哺评论区。
 - 🎨 **Obsidian 级学术排版**：英文字体 Anthropic Serif，中文字体华文中宋，支持 Obsidian Callouts 彩色提示框、KaTeX 公式与 Mermaid 矢量流程图。
 - 🖥️ **屏幕独立置顶浮窗**：窗口自由拖拽与缩放，支持「📌 已置顶」在屏幕最前端，文献阅读与 AI 对话互不遮挡。
@@ -249,4 +256,5 @@ This project is licensed under the [GNU Affero General Public License v3.0 or la
 
 1. 在 [Releases 页面](https://github.com/Gty0709/ZoteroAGY/releases) 下载 `zotero-agy.xpi`；
 2. 打开 Zotero 7 -> 工具 -> 插件 -> 齿轮图标 -> `Install Add-on From File...`；
-3. 选择下载好的 `.xpi` 文件安装并重启 Zotero 即可！
+3. 选择下载好的 `.xpi` 文件安装并重启 Zotero；
+4. 进入 **设置 -> ZoteroAGY**，可直接点击「🔍 自动寻找」一键识别本地 CLI 并测试连接！

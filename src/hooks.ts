@@ -155,7 +155,29 @@ export function debugLog(msg: string) {
       const file = Components.classes[
         "@mozilla.org/file/local;1"
       ].createInstance(Components.interfaces.nsIFile);
-      file.initWithPath("C:\\Users\\Administrator\\agy_debug.log");
+
+      let logPath = "";
+      try {
+        // @ts-ignore
+        const dir = Services.dirsvc.get("TmpD", Components.interfaces.nsIFile);
+        dir.append("agy_debug.log");
+        logPath = dir.path;
+      } catch (_) {
+        try {
+          // @ts-ignore
+          const home = Services.dirsvc.get(
+            "Home",
+            Components.interfaces.nsIFile,
+          ).path;
+          logPath = Zotero.isWin
+            ? `${home}\\agy_debug.log`
+            : `${home}/agy_debug.log`;
+        } catch (_) {
+          logPath = Zotero.isWin ? "C:\\agy_debug.log" : "/tmp/agy_debug.log";
+        }
+      }
+
+      file.initWithPath(logPath);
       // @ts-ignore
       const foStream = Components.classes[
         "@mozilla.org/network/file-output-stream;1"

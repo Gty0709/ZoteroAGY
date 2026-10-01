@@ -33,6 +33,103 @@ export class AGYClient {
     { id: "gpt-oss-120b-medium", label: "GPT-OSS 120B (Medium)" },
   ];
 
+  static getBinName(): string {
+    return Zotero.isWin ? "agy.exe" : "agy";
+  }
+
+  static getHomeDir(): string {
+    try {
+      // @ts-ignore
+      return Services.dirsvc.get("Home", Components.interfaces.nsIFile).path;
+    } catch (_) {
+      try {
+        return Services.env.get(Zotero.isWin ? "USERPROFILE" : "HOME") || "";
+      } catch (_) {
+        return "";
+      }
+    }
+  }
+
+  static checkFileExists(filePath: string): boolean {
+    if (!filePath) return false;
+    try {
+      // @ts-ignore
+      const file = Components.classes[
+        "@mozilla.org/file/local;1"
+      ].createInstance(Components.interfaces.nsIFile);
+      file.initWithPath(filePath);
+      return file.exists() && file.isFile();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static async detectSystemAgyPath(): Promise<string | null> {
+    const binName = AGYClient.getBinName();
+
+    // 1. Search PATH via Subprocess
+    try {
+      const Subprocess = getSubprocess();
+      const inPath = await Subprocess.pathSearch(binName);
+      if (inPath && AGYClient.checkFileExists(inPath)) return inPath;
+    } catch (_) {}
+
+    const home = AGYClient.getHomeDir();
+
+    // 2. Check Windows standard install paths
+    if (Zotero.isWin) {
+      const candidates = [
+        home ? `${home}\\AppData\\Local\\agy\\bin\\agy.exe` : "",
+        home ? `${home}\\AppData\\Local\\Programs\\agy\\bin\\agy.exe` : "",
+        "C:\\Users\\Administrator\\AppData\\Local\\agy\\bin\\agy.exe",
+      ].filter(Boolean);
+      for (const cand of candidates) {
+        if (AGYClient.checkFileExists(cand)) return cand;
+      }
+    }
+
+    // 3. Check Linux and Unix standard install paths
+    if (!Zotero.isWin) {
+      const candidates = [
+        home ? `${home}/.local/bin/agy` : "",
+        home ? `${home}/.gemini/antigravity/bin/agy` : "",
+        home ? `${home}/.config/Antigravity/bin/agy` : "",
+        home ? `${home}/.cargo/bin/agy` : "",
+        home ? `${home}/.bun/bin/agy` : "",
+        home ? `${home}/bin/agy` : "",
+        "/usr/local/bin/agy",
+        "/usr/bin/agy",
+        "/bin/agy",
+        "/opt/agy/bin/agy",
+        "/opt/homebrew/bin/agy",
+        "/snap/bin/agy",
+        "/var/lib/flatpak/exports/bin/agy",
+        home ? `${home}/.local/share/flatpak/exports/bin/agy` : "",
+      ].filter(Boolean);
+      for (const cand of candidates) {
+        if (AGYClient.checkFileExists(cand)) return cand;
+      }
+
+      // 4. Linux shell fallback (in case desktop launcher stripped PATH)
+      try {
+        const Subprocess = getSubprocess();
+        const proc = await Subprocess.call({
+          command: "/bin/sh",
+          arguments: ["-c", "which agy"],
+          stdout: "pipe",
+          stderr: "ignore",
+        });
+        const out = (await proc.stdout.readString())?.trim();
+        await proc.wait();
+        if (out && AGYClient.checkFileExists(out)) {
+          return out;
+        }
+      } catch (_) {}
+    }
+
+    return null;
+  }
+
   static async findAgyPath(): Promise<string | null> {
     // 1. Check user preference override
     const customPath = (
@@ -41,96 +138,54 @@ export class AGYClient {
         true,
       ) as string
     )?.trim();
-    if (customPath) {
-      try {
-        // @ts-ignore
-        const file = Components.classes[
-          "@mozilla.org/file/local;1"
-        ].createInstance(Components.interfaces.nsIFile);
-        file.initWithPath(customPath);
-        if (file.exists() && file.isFile()) return customPath;
-      } catch (_) {}
+    if (customPath && AGYClient.checkFileExists(customPath)) {
+      return customPath;
     }
 
-    // 2. Search PATH
-    try {
-      const Subprocess = getSubprocess();
-      const inPath = await Subprocess.pathSearch(
-        Zotero.isWin ? "agy.exe" : "agy",
-      );
-      if (inPath) return inPath;
-    } catch (_) {}
-
-    // 3. Check Windows standard install paths
-    if (Zotero.isWin) {
-      try {
-        // @ts-ignore
-        const home = Services.dirsvc.get(
-          "Home",
-          Components.interfaces.nsIFile,
-        ).path;
-        const candidates = [
-          home + "\\AppData\\Local\\agy\\bin\\agy.exe",
-          home + "\\AppData\\Local\\Programs\\agy\\bin\\agy.exe",
-          "C:\\Users\\Administrator\\AppData\\Local\\agy\\bin\\agy.exe",
-        ];
-        for (const cand of candidates) {
-          try {
-            // @ts-ignore
-            const file = Components.classes[
-              "@mozilla.org/file/local;1"
-            ].createInstance(Components.interfaces.nsIFile);
-            file.initWithPath(cand);
-            if (file.exists() && file.isFile()) return cand;
-          } catch (_) {}
-        }
-      } catch (_) {}
-    }
-
-    // 4. Check Unix standard install paths
-    if (!Zotero.isWin) {
-      try {
-        // @ts-ignore
-        const home = Services.dirsvc.get(
-          "Home",
-          Components.interfaces.nsIFile,
-        ).path;
-        const candidates = [
-          home + "/.local/bin/agy",
-          "/usr/local/bin/agy",
-          "/opt/homebrew/bin/agy",
-        ];
-        for (const cand of candidates) {
-          try {
-            // @ts-ignore
-            const file = Components.classes[
-              "@mozilla.org/file/local;1"
-            ].createInstance(Components.interfaces.nsIFile);
-            file.initWithPath(cand);
-            if (file.exists() && file.isFile()) return cand;
-          } catch (_) {}
-        }
-      } catch (_) {}
-    }
-
-    return null;
+    // 2. Detect from system paths
+    return await AGYClient.detectSystemAgyPath();
   }
 
-  static async checkCLIStatus(): Promise<{
+  static async checkCLIStatus(specifiedPath?: string): Promise<{
     available: boolean;
     path: string | null;
+    version?: string;
     error?: string;
   }> {
     try {
-      const agyPath = await AGYClient.findAgyPath();
-      if (!agyPath) {
+      const agyPath = specifiedPath || (await AGYClient.findAgyPath());
+      const binName = AGYClient.getBinName();
+      if (!agyPath || !AGYClient.checkFileExists(agyPath)) {
         return {
           available: false,
           path: null,
-          error: "未检测到 agy.exe，请确认安装或在设置中配置路径",
+          error: `未检测到 Antigravity CLI (${binName})，请确认安装或在设置中指定路径`,
         };
       }
-      return { available: true, path: agyPath };
+
+      // Test execution and retrieve version
+      try {
+        const Subprocess = getSubprocess();
+        const proc = await Subprocess.call({
+          command: agyPath,
+          arguments: ["--version"],
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        const out = (await proc.stdout.readString())?.trim();
+        await proc.wait();
+        return {
+          available: true,
+          path: agyPath,
+          version: out || undefined,
+        };
+      } catch (runErr: any) {
+        return {
+          available: true,
+          path: agyPath,
+          error: runErr?.message,
+        };
+      }
     } catch (e: any) {
       return { available: false, path: null, error: e?.message || String(e) };
     }
@@ -142,9 +197,10 @@ export class AGYClient {
     conversationId?: string,
   ): Promise<{ response: string; agyConversationId?: string }> {
     const agyPath = await AGYClient.findAgyPath();
+    const binName = AGYClient.getBinName();
     if (!agyPath) {
       throw new Error(
-        "未检测到 Antigravity CLI (agy.exe)。请确认已安装并在首选项设置中指定正确路径。",
+        `未检测到 Antigravity CLI (${binName})。请确认已安装并在首选项设置中指定正确路径。`,
       );
     }
 
@@ -164,13 +220,27 @@ export class AGYClient {
       "--disable-slash-commands",
     );
 
-    const proc = await Subprocess.call({
+    const procOptions: any = {
       command: agyPath,
       arguments: args,
       stdin: "pipe",
       stdout: "pipe",
       stderr: "pipe",
-    });
+    };
+
+    if (!Zotero.isWin) {
+      try {
+        const homeDir = AGYClient.getHomeDir();
+        if (homeDir) {
+          procOptions.environmentAppend = true;
+          procOptions.environment = {
+            HOME: homeDir,
+          };
+        }
+      } catch (_) {}
+    }
+
+    const proc = await Subprocess.call(procOptions);
 
     // Write prompt into stdin and close write stream
     await proc.stdin.write(prompt);
