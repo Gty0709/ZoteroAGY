@@ -320,7 +320,16 @@ export class NoteFormatter {
       if (win.Node) setGlobal(globalObj, "Node", win.Node);
     }
 
-    // Intercept document.body in case of XUL/XHTML documents where document.body is null
+    // Body element resolution for XUL / XHTML / standalone windows
+    const getBodyElement = (): Element => {
+      return (
+        doc.getElementsByTagName("body")[0] ||
+        doc.getElementById("zoteroagy-standalone-root") ||
+        doc.documentElement
+      );
+    };
+
+    // 1. Intercept document.body in case of XUL/XHTML documents where document.body is null
     let tempBodyCreated = false;
     let originalBodyDesc: PropertyDescriptor | undefined;
     if (!doc.body) {
@@ -328,13 +337,123 @@ export class NoteFormatter {
         originalBodyDesc = Object.getOwnPropertyDescriptor(doc, "body");
         Object.defineProperty(doc, "body", {
           configurable: true,
-          get: () =>
-            doc.documentElement ||
-            doc.getElementById("zoteroagy-standalone-root") ||
-            doc,
+          get: () => getBodyElement(),
         });
         tempBodyCreated = true;
       } catch (_) {}
+    }
+
+    // 2. Intercept querySelector on doc, Document.prototype, and Element.prototype
+    const hookQuerySelector = (origFn: (sel: string) => Element | null) => {
+      return function (this: any, selector: string): Element | null {
+        if (!selector) return null;
+        const sel = selector.trim();
+        if (sel === "body") {
+          return getBodyElement();
+        }
+        if (sel.startsWith('[id="') && sel.endsWith('"]')) {
+          const id = sel.slice(5, -2);
+          const found = doc.getElementById(id);
+          if (found) return found;
+        }
+        if (sel.startsWith("#")) {
+          const id = sel.slice(1);
+          const found = doc.getElementById(id);
+          if (found) return found;
+        }
+        try {
+          return origFn.call(this, selector);
+        } catch (_) {
+          return null;
+        }
+      };
+    };
+
+    const origDocQS = doc.querySelector?.bind(doc);
+    if (origDocQS) {
+      setGlobal(doc, "querySelector", hookQuerySelector(origDocQS));
+    }
+
+    const docProto = (win as any)?.Document?.prototype;
+    if (docProto && docProto.querySelector) {
+      setGlobal(
+        docProto,
+        "querySelector",
+        hookQuerySelector(docProto.querySelector),
+      );
+    }
+
+    const elemProto = (win as any)?.Element?.prototype;
+    if (elemProto && elemProto.querySelector) {
+      setGlobal(
+        elemProto,
+        "querySelector",
+        hookQuerySelector(elemProto.querySelector),
+      );
+    }
+
+    // 3. Intercept querySelectorAll for "body"
+    const hookQuerySelectorAll = (origFn: (sel: string) => any) => {
+      return function (this: any, selector: string): any {
+        if (!selector) return [];
+        const sel = selector.trim();
+        if (sel === "body") {
+          const el = getBodyElement();
+          return el ? [el] : [];
+        }
+        try {
+          return origFn.call(this, selector);
+        } catch (_) {
+          return [];
+        }
+      };
+    };
+
+    const origDocQSA = doc.querySelectorAll?.bind(doc);
+    if (origDocQSA) {
+      setGlobal(doc, "querySelectorAll", hookQuerySelectorAll(origDocQSA));
+    }
+    if (docProto && docProto.querySelectorAll) {
+      setGlobal(
+        docProto,
+        "querySelectorAll",
+        hookQuerySelectorAll(docProto.querySelectorAll),
+      );
+    }
+
+    // 4. Wrap SVGElement getBBox and getComputedTextLength to prevent NS_ERROR_FAILURE in Gecko
+    const svgProto = (win as any)?.SVGElement?.prototype;
+    if (svgProto) {
+      if (svgProto.getBBox) {
+        const origGetBBox = svgProto.getBBox;
+        setGlobal(svgProto, "getBBox", function (this: any) {
+          try {
+            return origGetBBox.call(this);
+          } catch (_) {
+            const text = this.textContent || "";
+            return {
+              x: 0,
+              y: 0,
+              width: Math.max(20, text.length * 9),
+              height: 24,
+            };
+          }
+        });
+      }
+      if (svgProto.getComputedTextLength) {
+        const origGetComputedTextLength = svgProto.getComputedTextLength;
+        setGlobal(svgProto, "getComputedTextLength", function (this: any) {
+          try {
+            const len = origGetComputedTextLength.call(this);
+            if (typeof len === "number" && !isNaN(len)) return len;
+          } catch (_) {}
+          return Math.max(10, (this.textContent || "").length * 8);
+        });
+      } else {
+        setGlobal(svgProto, "getComputedTextLength", function (this: any) {
+          return Math.max(10, (this.textContent || "").length * 8);
+        });
+      }
     }
 
     try {
@@ -352,11 +471,13 @@ export class NoteFormatter {
       }
       for (let i = restores.length - 1; i >= 0; i--) {
         const r = restores[i];
-        if (r.had) {
-          r.target[r.key] = r.prev;
-        } else {
-          delete r.target[r.key];
-        }
+        try {
+          if (r.had) {
+            r.target[r.key] = r.prev;
+          } else {
+            delete r.target[r.key];
+          }
+        } catch (_) {}
       }
     }
   }
@@ -548,7 +669,7 @@ export class NoteFormatter {
           "div",
         ) as HTMLElement;
         host.style.cssText =
-          "position: absolute; left: -9999px; top: 0; width: 800px; height: 1px; overflow: hidden;";
+          "position: absolute; left: -9999px; top: 0; width: 800px; min-height: 100px; visibility: hidden;";
         outputEl.appendChild(host);
 
         let svg = "";
