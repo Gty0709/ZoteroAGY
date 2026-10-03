@@ -619,7 +619,7 @@ export class NoteFormatter {
               htmlLabels: false,
               theme: "default",
               fontFamily:
-                '"Anthropic Serif", "Copernicus", "华文中宋", "STZhongsong", serif',
+                '"Anthropic Serif", "Copernicus", "华文书宋", "STShuSong", "华文宋体", "STSong", "华文中宋", "STZhongsong", serif',
               flowchart: {
                 htmlLabels: false,
                 useHtmlLabels: false,
@@ -772,7 +772,7 @@ export class NoteFormatter {
             htmlLabels: false,
             theme: "default",
             fontFamily:
-              '"Anthropic Serif", "Copernicus", "华文中宋", "STZhongsong", serif',
+              '"Anthropic Serif", "Copernicus", "华文书宋", "STShuSong", "华文宋体", "STSong", "华文中宋", "STZhongsong", serif',
             flowchart: {
               htmlLabels: false,
               useHtmlLabels: false,

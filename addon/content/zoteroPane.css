@@ -45,7 +45,7 @@ collapsible-section[data-pane*="agy-chat"][open] {
 }
 
 :root, .agy-panel, #zoteroagy-standalone, #zoteroagy-standalone-root {
-  --agy-font-family: "Anthropic Serif", "Copernicus", "Tiempos Text", "Charter", Georgia, "华文中宋", "STZhongsong", "SimSun-ExtB", serif;
+  --agy-font-family: "Anthropic Serif", "Copernicus", "Tiempos Text", "Charter", Georgia, "华文书宋", "STShuSong", "华文宋体", "STSong", "华文中宋", "STZhongsong", "SimSun-ExtB", serif;
   --agy-font-size: 14px;
 }
 
