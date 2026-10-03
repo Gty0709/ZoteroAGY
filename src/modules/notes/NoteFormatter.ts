@@ -24,46 +24,62 @@ export class NoteFormatter {
 
     try {
       // 1. Preprocess Math formulas to protect them from markdown parsing
-      const mathPlaceholders: { id: string; html: string }[] = [];
+      const mathPlaceholders: {
+        id: string;
+        html: string;
+        block: boolean;
+      }[] = [];
       let mathCounter = 0;
 
-      // Extract display math ($$...$$)
-      let processed = md.replace(/\$\$([\s\S]+?)\$\$/g, (_match, expr) => {
-        const id = `___KATEX_BLOCK_${mathCounter++}___`;
-        try {
-          const rendered = katex.renderToString(expr.trim(), {
-            displayMode: true,
-            throwOnError: false,
-          });
-          mathPlaceholders.push({
-            id,
-            html: `<div class="agy-math-block">${rendered}</div>`,
-          });
-        } catch {
-          mathPlaceholders.push({
-            id,
-            html: `<pre class="agy-math-err">${expr}</pre>`,
-          });
-        }
-        return id;
-      });
-
-      // Extract inline math ($...$) - ensure no spaces right after or before $
-      processed = processed.replace(
-        /(?<!\$)\$(?!\$)([^$\n]+?)(?<!\$)\$(?!\$)/g,
-        (_match, expr) => {
-          const id = `___KATEX_INLINE_${mathCounter++}___`;
+      // Extract display math ($$...$$ and \[...\])
+      let processed = md.replace(
+        /(?:\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\])/g,
+        (_match, expr1, expr2) => {
+          const expr = (expr1 || expr2 || "").trim();
+          const id = `%%KATEX_BLOCK_${mathCounter++}%%`;
           try {
-            const rendered = katex.renderToString(expr.trim(), {
+            const rendered = katex.renderToString(expr, {
+              displayMode: true,
+              throwOnError: false,
+            });
+            mathPlaceholders.push({
+              id,
+              html: `<div class="agy-math-block">${rendered}</div>`,
+              block: true,
+            });
+          } catch {
+            mathPlaceholders.push({
+              id,
+              html: `<pre class="agy-math-err">${expr}</pre>`,
+              block: true,
+            });
+          }
+          return `\n\n${id}\n\n`;
+        },
+      );
+
+      // Extract inline math ($...$ and \(...\)) - ensure no spaces right after or before $
+      processed = processed.replace(
+        /(?:(?<!\$)\$(?!\$)([^$\n]+?)(?<!\$)\$(?!\$)|\\\(([^$\n]+?)\\\))/g,
+        (_match, expr1, expr2) => {
+          const expr = (expr1 || expr2 || "").trim();
+          const id = `%%KATEX_INLINE_${mathCounter++}%%`;
+          try {
+            const rendered = katex.renderToString(expr, {
               displayMode: false,
               throwOnError: false,
             });
             mathPlaceholders.push({
               id,
               html: `<span class="agy-math-inline">${rendered}</span>`,
+              block: false,
             });
           } catch {
-            mathPlaceholders.push({ id, html: `<code>${expr}</code>` });
+            mathPlaceholders.push({
+              id,
+              html: `<code>${expr}</code>`,
+              block: false,
+            });
           }
           return id;
         },
@@ -164,7 +180,16 @@ export class NoteFormatter {
 
       // 6. Restore Math placeholders
       for (const item of mathPlaceholders) {
-        html = html.replace(item.id, item.html);
+        if (item.block) {
+          const pRegex = new RegExp(`<p>\\s*${item.id}\\s*<\\/p>`, "g");
+          if (pRegex.test(html)) {
+            html = html.replace(pRegex, () => item.html);
+          } else {
+            html = html.replaceAll(item.id, () => item.html);
+          }
+        } else {
+          html = html.replaceAll(item.id, () => item.html);
+        }
       }
 
       return html;
@@ -463,15 +488,49 @@ export class NoteFormatter {
       }
 
       try {
+        // Enforce pure SVG rendering before each render (avoids foreignObject/HTML failures in XUL/XHTML)
+        try {
+          await NoteFormatter.withDocumentGlobals(doc, () => {
+            m.initialize({
+              startOnLoad: false,
+              securityLevel: "loose",
+              suppressErrorRendering: true,
+              htmlLabels: false,
+              theme: "default",
+              fontFamily:
+                '"Anthropic Serif", "Copernicus", "华文中宋", "STZhongsong", serif',
+              flowchart: {
+                htmlLabels: false,
+                useHtmlLabels: false,
+                curve: "basis",
+              },
+              sequence: {
+                useHtmlLabels: false,
+              },
+              class: {
+                htmlLabels: false,
+                useHtmlLabels: false,
+              },
+              state: {
+                htmlLabels: false,
+                useHtmlLabels: false,
+              },
+              er: {
+                useHtmlLabels: false,
+              },
+            });
+          });
+        } catch (_) {}
+
         // Try original code first if parse is clean, otherwise try normalized code
         let codeToRender = code;
         let canParseOriginal = false;
         if (typeof m.parse === "function") {
           try {
-            await NoteFormatter.withDocumentGlobals(doc, () =>
+            const parseRes = await NoteFormatter.withDocumentGlobals(doc, () =>
               m.parse(code, { suppressErrors: true }),
             );
-            canParseOriginal = true;
+            canParseOriginal = !!parseRes;
           } catch (_) {
             canParseOriginal = false;
           }
@@ -582,19 +641,35 @@ export class NoteFormatter {
       }
     }
 
-    if (m && !m.__agyInitialized) {
+    if (m) {
       try {
         await NoteFormatter.withDocumentGlobals(doc, () => {
           m.initialize({
             startOnLoad: false,
             securityLevel: "loose",
             suppressErrorRendering: true,
+            htmlLabels: false,
             theme: "default",
             fontFamily:
               '"Anthropic Serif", "Copernicus", "华文中宋", "STZhongsong", serif',
             flowchart: {
               htmlLabels: false,
+              useHtmlLabels: false,
               curve: "basis",
+            },
+            sequence: {
+              useHtmlLabels: false,
+            },
+            class: {
+              htmlLabels: false,
+              useHtmlLabels: false,
+            },
+            state: {
+              htmlLabels: false,
+              useHtmlLabels: false,
+            },
+            er: {
+              useHtmlLabels: false,
             },
           });
           m.__agyInitialized = true;
