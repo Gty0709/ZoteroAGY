@@ -52,9 +52,9 @@ export class StandaloneWindow {
     // Apply always-on-top flags to window
     StandaloneWindow.setWindowAlwaysOnTop(win, keepOnTop);
 
-    // On Linux, schedule native X11 window hints retries after window is fully mapped
+    // Platform native pin adjustments
+    const title = win.document?.title || "AGY 智能助手";
     if ((Zotero as any).isLinux) {
-      const title = win.document?.title || "AGY 智能助手";
       StandaloneWindow.applyLinuxNativeAlwaysOnTop(title, keepOnTop);
       win.setTimeout(() => {
         StandaloneWindow.applyLinuxNativeAlwaysOnTop(title, keepOnTop);
@@ -62,18 +62,23 @@ export class StandaloneWindow {
       win.setTimeout(() => {
         StandaloneWindow.applyLinuxNativeAlwaysOnTop(title, keepOnTop);
       }, 700);
+    } else if (Zotero.isWin) {
+      StandaloneWindow.applyWindowsNativeAlwaysOnTop(title, keepOnTop);
+      win.setTimeout(() => {
+        StandaloneWindow.applyWindowsNativeAlwaysOnTop(title, keepOnTop);
+      }, 300);
     }
 
     // When main window is activated, ensure native keep-above hints remain intact
     if (mainWindow) {
       const onMainActivate = () => {
-        if (
-          StandaloneWindow.isOpen() &&
-          StandaloneWindow.isKeepOnTop() &&
-          (Zotero as any).isLinux
-        ) {
-          const title = win.document?.title || "AGY 智能助手";
-          StandaloneWindow.applyLinuxNativeAlwaysOnTop(title, true);
+        if (StandaloneWindow.isOpen() && StandaloneWindow.isKeepOnTop()) {
+          const t = win.document?.title || "AGY 智能助手";
+          if ((Zotero as any).isLinux) {
+            StandaloneWindow.applyLinuxNativeAlwaysOnTop(t, true);
+          } else if (Zotero.isWin) {
+            StandaloneWindow.applyWindowsNativeAlwaysOnTop(t, true);
+          }
         }
       };
       mainWindow.addEventListener("activate", onMainActivate);
@@ -186,6 +191,48 @@ fi
     } catch (_) {}
   }
 
+  public static async applyWindowsNativeAlwaysOnTop(
+    title: string,
+    onTop: boolean,
+  ): Promise<void> {
+    if (!Zotero.isWin) return;
+    try {
+      const Subprocess = StandaloneWindow.getSubprocess();
+      if (!Subprocess) return;
+
+      const psScript = `
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public class WinPin {
+    [DllImport("user32.dll", EntryPoint="FindWindowW", CharSet=CharSet.Unicode)]
+    public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
+    [DllImport("user32.dll")]
+    public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+}
+"@
+$h = [WinPin]::FindWindow($null, "${title}")
+if ($h -ne [IntPtr]::Zero) {
+    [WinPin]::SetWindowPos($h, [IntPtr](${onTop ? -1 : -2}), 0, 0, 0, 0, 3)
+}
+`;
+      const proc = await Subprocess.call({
+        command: "powershell.exe",
+        arguments: [
+          "-NoProfile",
+          "-NonInteractive",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-Command",
+          psScript,
+        ],
+        stdout: "ignore",
+        stderr: "ignore",
+      });
+      await proc.wait();
+    } catch (_) {}
+  }
+
   public static setWindowAlwaysOnTop(win: Window, onTop: boolean): boolean {
     if (!win) return false;
     let applied = false;
@@ -241,6 +288,9 @@ fi
     if ((Zotero as any).isLinux) {
       const title = win.document?.title || "AGY 智能助手";
       StandaloneWindow.applyLinuxNativeAlwaysOnTop(title, onTop);
+    } else if (Zotero.isWin) {
+      const title = win.document?.title || "AGY 智能助手";
+      StandaloneWindow.applyWindowsNativeAlwaysOnTop(title, onTop);
     }
 
     return applied;

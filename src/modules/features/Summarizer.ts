@@ -20,7 +20,7 @@ export class Summarizer {
     abstract: string,
     itemKey?: string,
   ): string {
-    return `请对以下学术论文进行结构化深入分析。必须绝对忠于文献原文，严禁学术虚构。如需了解详细实验设计与实现细节，请主动调用 Zotero MCP 工具 (zotero_item_fulltext(item_key="${itemKey || ""}")) 调取正文全文并阅读笔记。
+    return `请对以下学术论文进行结构化深入分析。必须绝对忠于文献原文，严禁学术虚构。如需了解详细实验设计与实现细节，请主动调用 Zotero MCP 工具 (Windows 下调用 get_content(itemKey="${itemKey || ""}")，Linux 下调用 zotero_item_fulltext(item_key="${itemKey || ""}")) 调取正文全文并阅读笔记。
 
 论文标题: ${title}
 Zotero ItemKey: ${itemKey || ""}

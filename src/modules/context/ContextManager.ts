@@ -75,7 +75,7 @@ export class ContextManager {
       prompt += `[${ctx.type}]${source}${keyInfo}: "${ctx.text}"\n`;
     }
     prompt +=
-      "\n【执行指令】上述内容为用户特别选定的文献、笔记或批注上下文。若需获取全文正文，请使用上述条目的 Zotero ItemKey 主动调用 zotero_item_fulltext(item_key=...)。回答必须严格忠实于原文及笔记！\n";
+      "\n【执行指令】上述内容为用户特别选定的文献、笔记或批注上下文。若需获取完整正文，请使用上述条目的 Zotero ItemKey 调用 get_content(itemKey=...) 或 zotero_item_fulltext(item_key=...)。回答必须严格忠实于原文及笔记！\n";
     return prompt;
   }
 
@@ -135,7 +135,7 @@ export class ContextManager {
 
       let info = `[当前研读文献与笔记 (Active Zotero Document)]\n`;
       info += `- 论文标题 (Title): ${title}\n`;
-      info += `- Zotero ItemKey: ${itemKey} (重要：可直接调用 zotero_item_fulltext(item_key="${itemKey}") 获取全文，zotero_item_metadata 获取元数据)\n`;
+      info += `- Zotero ItemKey: ${itemKey} (重要：提取全文请调用 get_content(itemKey="${itemKey}") 或 zotero_item_fulltext(item_key="${itemKey}")；获取元数据请调用 get_item_details 或 zotero_item_metadata)\n`;
       if (creators) info += `- 作者 (Authors): ${creators}\n`;
       if (date) info += `- 年份 (Date): ${date}\n`;
       if (doi) info += `- DOI: ${doi}\n`;
@@ -165,7 +165,7 @@ export class ContextManager {
         }
       }
 
-      info += `\n【执行指令】用户当前正在阅读/选定此文献。若回答涉及该论文的方法、架构、公式或实验细节，必须强制调用 zotero_item_fulltext 提取全文求证，深度结合上述笔记。若涉及开源代码，必须检索官方开源代码仓库核实源码，绝对忠于原文！`;
+      info += `\n【执行指令】用户当前正在阅读/选定此文献。若回答涉及该论文的方法、架构、公式或实验细节，必须强制调用 get_content 或 zotero_item_fulltext 提取全文求证，深度结合上述笔记。若涉及开源代码，必须检索官方开源代码仓库核实源码，绝对忠于原文！`;
 
       return info;
     } catch (_) {

@@ -136,11 +136,36 @@ export class AGYClient {
       const candidates = [
         home ? `${home}\\AppData\\Local\\agy\\bin\\agy.exe` : "",
         home ? `${home}\\AppData\\Local\\Programs\\agy\\bin\\agy.exe` : "",
+        home ? `${home}\\AppData\\Local\\Programs\\antigravity\\agy.exe` : "",
+        home ? `${home}\\.gemini\\antigravity\\bin\\agy.exe` : "",
+        home ? `${home}\\.gemini\\antigravity\\agy.exe` : "",
+        home ? `${home}\\.cargo\\bin\\agy.exe` : "",
+        home ? `${home}\\scoop\\shims\\agy.exe` : "",
         "C:\\Users\\Administrator\\AppData\\Local\\agy\\bin\\agy.exe",
+        "C:\\Program Files\\antigravity\\agy.exe",
+        "C:\\Program Files\\agy\\agy.exe",
       ].filter(Boolean);
       for (const cand of candidates) {
         if (AGYClient.checkFileExists(cand)) return cand;
       }
+
+      // Windows where.exe fallback (in case desktop launcher stripped PATH)
+      try {
+        const Subprocess = getSubprocess();
+        const proc = await Subprocess.call({
+          command: "C:\\Windows\\System32\\where.exe",
+          arguments: ["agy"],
+          stdout: "pipe",
+          stderr: "ignore",
+        });
+        const out = (await proc.stdout.readString())
+          ?.trim()
+          ?.split(/[\r\n]+/)?.[0];
+        await proc.wait();
+        if (out && AGYClient.checkFileExists(out)) {
+          return out;
+        }
+      } catch (_) {}
     }
 
     // 3. Check Linux and Unix standard install paths
@@ -295,17 +320,16 @@ export class AGYClient {
       workdir: AGYClient.getHomeDir() || null,
     };
 
-    if (!Zotero.isWin) {
-      try {
-        const homeDir = AGYClient.getHomeDir();
-        if (homeDir) {
-          procOptions.environmentAppend = true;
-          procOptions.environment = {
-            HOME: homeDir,
-          };
-        }
-      } catch (_) {}
-    }
+    try {
+      const homeDir = AGYClient.getHomeDir();
+      if (homeDir) {
+        procOptions.environmentAppend = true;
+        procOptions.environment = {
+          HOME: homeDir,
+          ...(Zotero.isWin ? { USERPROFILE: homeDir } : {}),
+        };
+      }
+    } catch (_) {}
 
     const proc = await Subprocess.call(procOptions);
 
