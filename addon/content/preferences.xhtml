@@ -60,15 +60,32 @@
       preference="model"
       style="width: 100%; padding: 6px; margin-top: 4px;"
     >
-      <html:option value="gemini-3.8-flash-high">Gemini 3.8 Flash (High) - 推荐</html:option>
-      <html:option value="gemini-3.8-flash-low">Gemini 3.8 Flash (Low) - 极速</html:option>
-      <html:option value="gemini-3.1-pro-high">Gemini 3.1 Pro (High) - 深度推理</html:option>
-      <html:option value="claude-sonnet-4-6">Claude Sonnet 4.6 (Thinking)</html:option>
-      <html:option value="claude-opus-4-6-thinking">Claude Opus 4.6 (Thinking)</html:option>
-      <html:option value="gpt-oss-120b-medium">GPT-OSS 120B (Medium)</html:option>
+      <html:option value="gemini-3.8-flash">Gemini 3.8 Flash (推荐)</html:option>
+      <html:option value="gemini-3.7-flash">Gemini 3.7 Flash</html:option>
+      <html:option value="gemini-3.6-flash">Gemini 3.6 Flash</html:option>
+      <html:option value="gemini-3.1-pro">Gemini 3.1 Pro (深度推理)</html:option>
+      <html:option value="claude-sonnet-4-6">Claude Sonnet 4.6</html:option>
+      <html:option value="claude-opus-4-6-thinking">Claude Opus 4.6</html:option>
+      <html:option value="gpt-oss-120b">GPT-OSS 120B</html:option>
     </html:select>
     <html:p style="color: #666; font-size: 12px; margin-top: 2px;">
-      也可以在侧边栏对话面板底部随时快速切换模型。
+      对话所使用的主模型，可在侧边栏底部随时快速切换。
+    </html:p>
+  </vbox>
+
+  <vbox style="margin-bottom: 15px;">
+    <html:label for="zotero-prefpane-__addonRef__-effort">默认思考强度 (Reasoning Effort):</html:label>
+    <html:select
+      id="zotero-prefpane-__addonRef__-effort"
+      preference="effort"
+      style="width: 100%; padding: 6px; margin-top: 4px;"
+    >
+      <html:option value="high">高思考 (High) - 深度推理</html:option>
+      <html:option value="medium">中思考 (Medium) - 均衡</html:option>
+      <html:option value="low">低思考 (Low) - 极速响应</html:option>
+    </html:select>
+    <html:p id="zotero-prefpane-__addonRef__-effortHint" style="color: #666; font-size: 12px; margin-top: 2px;">
+      模型思考推导强度（Claude 等模型使用其内置策略，不受此设置影响）。
     </html:p>
   </vbox>
 

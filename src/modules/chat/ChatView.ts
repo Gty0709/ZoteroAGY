@@ -32,6 +32,7 @@ export interface AGYPanelInstance {
   sendButton: HTMLButtonElement;
   authStatusElement: HTMLElement;
   modelSelectElement: HTMLSelectElement;
+  effortSelectElement?: HTMLSelectElement;
   pinButton?: HTMLElement;
   isStandalone?: boolean;
   historyDrawer?: HTMLElement;
@@ -273,12 +274,7 @@ export class ChatView {
     panel.appendChild(messages);
 
     // Contexts box
-    const contextsBox = el(
-      doc,
-      "div",
-      "agy-contexts-box",
-      "display: none; flex-wrap: wrap; gap: 4px; padding: 6px 10px; background: rgba(43, 127, 255, 0.06); border-top: 1px solid rgba(0,0,0,0.08); max-height: 80px; overflow-y: auto; flex-shrink: 0;",
-    );
+    const contextsBox = el(doc, "div", "agy-contexts-box", "display: none;");
     contextsBox.id = isStandalone
       ? "agy-standalone-contexts-box"
       : "agy-contexts-box";
@@ -307,26 +303,98 @@ export class ChatView {
       "display: flex; justify-content: space-between; align-items: center;",
     );
 
-    // Model selector
+    // Selectors group: Model + Effort
+    const selectorsGroup = el(doc, "div", "agy-selectors-group");
+
     const modelSelect = el(doc, "select", "agy-model-select");
+    modelSelect.title = "选择模型 (Model)";
     const currentModel = AGYClient.getModel();
     for (const m of AGYClient.AVAILABLE_MODELS) {
-      const opt = el(doc, "option", "", "", m.label);
+      const opt = el(doc, "option", "", "", m.name);
       opt.value = m.id;
       if (m.id === currentModel) opt.selected = true;
       modelSelect.appendChild(opt);
     }
+
+    const effortSelect = el(doc, "select", "agy-effort-select");
+
+    const populateEffortOptions = (
+      selectEl: HTMLSelectElement,
+      modelId: string,
+      targetEffort?: string,
+    ) => {
+      const modelDef = AGYClient.AVAILABLE_MODELS.find((m) => m.id === modelId);
+      selectEl.innerHTML = "";
+      if (!modelDef || modelDef.efforts.length === 0) {
+        const opt = el(doc, "option", "", "", "内置思考");
+        opt.value = "";
+        selectEl.appendChild(opt);
+        selectEl.disabled = true;
+        selectEl.title = "当前模型不支持自定义思考强度";
+        return;
+      }
+      selectEl.disabled = false;
+      selectEl.title = "选择思考强度 (Reasoning Effort)";
+      const activeEffort =
+        targetEffort || AGYClient.getEffort() || modelDef.defaultEffort;
+      for (const effId of modelDef.efforts) {
+        const effMeta = AGYClient.AVAILABLE_EFFORTS.find((e) => e.id === effId);
+        const opt = el(doc, "option", "", "", effMeta ? effMeta.name : effId);
+        opt.value = effId;
+        if (
+          effId === activeEffort ||
+          (!modelDef.efforts.includes(activeEffort) &&
+            effId === modelDef.defaultEffort)
+        ) {
+          opt.selected = true;
+        }
+        selectEl.appendChild(opt);
+      }
+    };
+
+    populateEffortOptions(effortSelect, currentModel, AGYClient.getEffort());
+
     modelSelect.addEventListener("change", (e: any) => {
-      AGYClient.setModel(e.target.value);
-      // Sync model across other panel selects
+      const newModel = e.target.value;
+      AGYClient.setModel(newModel);
+      const modelDef = AGYClient.AVAILABLE_MODELS.find(
+        (m) => m.id === newModel,
+      );
+      let newEffort = AGYClient.getEffort();
+      if (modelDef && modelDef.efforts.length > 0) {
+        if (!modelDef.efforts.includes(newEffort)) {
+          newEffort = modelDef.defaultEffort;
+          AGYClient.setEffort(newEffort);
+        }
+      }
+      populateEffortOptions(effortSelect, newModel, newEffort);
+
+      // Sync across other panel instances
       for (const p of ChatView.panels) {
-        if (p.modelSelectElement) p.modelSelectElement.value = e.target.value;
+        if (p.modelSelectElement) p.modelSelectElement.value = newModel;
+        if (p.effortSelectElement) {
+          populateEffortOptions(p.effortSelectElement, newModel, newEffort);
+        }
       }
     });
 
+    effortSelect.addEventListener("change", (e: any) => {
+      const newEffort = e.target.value;
+      if (newEffort) {
+        AGYClient.setEffort(newEffort);
+        // Sync across other panel instances
+        for (const p of ChatView.panels) {
+          if (p.effortSelectElement && !p.effortSelectElement.disabled) {
+            p.effortSelectElement.value = newEffort;
+          }
+        }
+      }
+    });
+
+    selectorsGroup.append(modelSelect, effortSelect);
     const sendBtn = el(doc, "button", "agy-send-btn", "", "发送 ▶");
 
-    footer.append(modelSelect, sendBtn);
+    footer.append(selectorsGroup, sendBtn);
     inputSection.append(textarea, footer);
     panel.appendChild(inputSection);
 
@@ -360,6 +428,7 @@ export class ChatView {
       sendButton: sendBtn,
       authStatusElement: authStatus,
       modelSelectElement: modelSelect,
+      effortSelectElement: effortSelect,
       pinButton,
       isStandalone,
       historyDrawer: drawer,
@@ -594,18 +663,14 @@ export class ChatView {
       const label = el(
         doc,
         "span",
+        "agy-context-label",
         "",
-        "",
-        `[${ctx.type === "annotation" ? "批注" : "划词"}${ctx.page ? ` p.${ctx.page}` : ""}] ${ctx.text.slice(0, 18)}...`,
+        `[${ctx.type === "annotation" ? "批注" : "划词"}${ctx.page ? ` p.${ctx.page}` : ""}] ${ctx.text.slice(0, 24)}`,
       );
-      const close = el(
-        doc,
-        "span",
-        "agy-context-close",
-        "cursor: pointer; font-weight: bold; color: #1967d2; margin-left: 2px;",
-        "×",
-      );
-      close.addEventListener("click", () => {
+      const close = el(doc, "span", "agy-context-close", "", "×");
+      close.title = "移除此上下文";
+      close.addEventListener("click", (e: MouseEvent) => {
+        e.stopPropagation();
         ContextManager.removeContext(ctx.id);
         ChatView.renderContexts();
       });

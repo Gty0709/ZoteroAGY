@@ -15,8 +15,19 @@ export async function registerPrefsScripts(window: Window) {
   const browseBtn = getEl<HTMLButtonElement>("browseBtn");
   const testBtn = getEl<HTMLButtonElement>("testBtn");
   const statusBox = getEl<HTMLDivElement>("statusBox");
+  const modelSelect = getEl<HTMLSelectElement>("model");
+  const effortSelect = getEl<HTMLSelectElement>("effort");
+  const effortHint = getEl<HTMLElement>("effortHint");
 
-  if (!cliInput || !autoDetectBtn || !browseBtn || !testBtn || !statusBox) {
+  if (
+    !cliInput ||
+    !autoDetectBtn ||
+    !browseBtn ||
+    !testBtn ||
+    !statusBox ||
+    !modelSelect ||
+    !effortSelect
+  ) {
     // Elements might still be loading in the tab frame; retry briefly
     window.setTimeout(() => registerPrefsScripts(window), 80);
     return;
@@ -199,7 +210,39 @@ export async function registerPrefsScripts(window: Window) {
     }
   });
 
-  // 4. Initial status check on preference panel load
+  // 4. Model and Effort selector synchronization
+  function syncEffortWithModel() {
+    if (!modelSelect || !effortSelect) return;
+    const currentModelId = modelSelect.value || AGYClient.getModel();
+    const modelDef = AGYClient.AVAILABLE_MODELS.find(
+      (m) => m.id === currentModelId,
+    );
+    if (!modelDef || modelDef.efforts.length === 0) {
+      effortSelect.disabled = true;
+      if (effortHint) {
+        effortHint.textContent = `当前模型 (${modelDef?.name || currentModelId}) 不支持自定义思考强度（使用内置策略）。`;
+      }
+    } else {
+      effortSelect.disabled = false;
+      const supportedNames = modelDef.efforts
+        .map((e) => (e === "high" ? "High" : e === "medium" ? "Medium" : "Low"))
+        .join(", ");
+      if (effortHint) {
+        effortHint.textContent = `设置 ${modelDef.name} 的思考推导深度。当前模型支持: ${supportedNames}。`;
+      }
+      if (!modelDef.efforts.includes(effortSelect.value)) {
+        effortSelect.value = modelDef.defaultEffort;
+        effortSelect.dispatchEvent(
+          new window.Event("change", { bubbles: true }),
+        );
+      }
+    }
+  }
+
+  modelSelect.addEventListener("change", syncEffortWithModel);
+  syncEffortWithModel();
+
+  // 5. Initial status check on preference panel load
   try {
     const status = await AGYClient.checkCLIStatus();
     if (status.available) {

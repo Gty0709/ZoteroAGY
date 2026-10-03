@@ -23,14 +23,69 @@ function getSubprocess(): any {
   }
 }
 
+export interface ModelOption {
+  id: string;
+  name: string;
+  efforts: string[];
+  defaultEffort: string;
+}
+
+export interface EffortOption {
+  id: string;
+  name: string;
+  description: string;
+}
+
 export class AGYClient {
-  public static readonly AVAILABLE_MODELS = [
-    { id: "gemini-3.8-flash-high", label: "Gemini 3.8 Flash (High)" },
-    { id: "gemini-3.8-flash-low", label: "Gemini 3.8 Flash (Low)" },
-    { id: "gemini-3.1-pro-high", label: "Gemini 3.1 Pro (High)" },
-    { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6 (Thinking)" },
-    { id: "claude-opus-4-6-thinking", label: "Claude Opus 4.6 (Thinking)" },
-    { id: "gpt-oss-120b-medium", label: "GPT-OSS 120B (Medium)" },
+  public static readonly AVAILABLE_MODELS: ModelOption[] = [
+    {
+      id: "gemini-3.8-flash",
+      name: "Gemini 3.8 Flash",
+      efforts: ["high", "medium", "low"],
+      defaultEffort: "high",
+    },
+    {
+      id: "gemini-3.7-flash",
+      name: "Gemini 3.7 Flash",
+      efforts: ["high", "medium", "low"],
+      defaultEffort: "high",
+    },
+    {
+      id: "gemini-3.6-flash",
+      name: "Gemini 3.6 Flash",
+      efforts: ["high", "medium", "low"],
+      defaultEffort: "high",
+    },
+    {
+      id: "gemini-3.1-pro",
+      name: "Gemini 3.1 Pro",
+      efforts: ["high", "low"],
+      defaultEffort: "high",
+    },
+    {
+      id: "claude-sonnet-4-6",
+      name: "Claude Sonnet 4.6",
+      efforts: [],
+      defaultEffort: "",
+    },
+    {
+      id: "claude-opus-4-6-thinking",
+      name: "Claude Opus 4.6",
+      efforts: [],
+      defaultEffort: "",
+    },
+    {
+      id: "gpt-oss-120b",
+      name: "GPT-OSS 120B",
+      efforts: ["medium"],
+      defaultEffort: "medium",
+    },
+  ];
+
+  public static readonly AVAILABLE_EFFORTS: EffortOption[] = [
+    { id: "high", name: "高思考 (High)", description: "深度推理" },
+    { id: "medium", name: "中思考 (Medium)", description: "平衡" },
+    { id: "low", name: "低思考 (Low)", description: "极速响应" },
   ];
 
   static getBinName(): string {
@@ -206,14 +261,25 @@ export class AGYClient {
 
     const Subprocess = getSubprocess();
     const model = AGYClient.getModel();
+    const effort = AGYClient.getEffort();
 
     const args: string[] = [];
     if (conversationId) {
       args.push("--conversation", conversationId);
     }
+    args.push("--model", model);
+
+    const modelDef = AGYClient.AVAILABLE_MODELS.find((m) => m.id === model);
+    if (modelDef && modelDef.efforts.length > 0) {
+      const activeEffort = modelDef.efforts.includes(effort)
+        ? effort
+        : modelDef.defaultEffort;
+      if (activeEffort) {
+        args.push("--effort", activeEffort);
+      }
+    }
+
     args.push(
-      "--model",
-      model,
       "--output-format",
       "stream-json",
       "--dangerously-skip-permissions",
@@ -318,16 +384,51 @@ export class AGYClient {
   }
 
   static getModel(): string {
-    return (
-      (Zotero.Prefs.get(
-        `${addon.data.config.prefsPrefix}.model`,
-        true,
-      ) as string) || "gemini-3.8-flash-high"
-    );
+    const raw = (
+      Zotero.Prefs.get(`${addon.data.config.prefsPrefix}.model`, true) as string
+    )?.trim();
+    if (!raw) return "gemini-3.8-flash";
+
+    // Backward compatibility with legacy composite strings
+    if (raw.startsWith("gemini-3.8-flash")) return "gemini-3.8-flash";
+    if (raw.startsWith("gemini-3.7-flash")) return "gemini-3.7-flash";
+    if (raw.startsWith("gemini-3.6-flash")) return "gemini-3.6-flash";
+    if (raw.startsWith("gemini-3.1-pro")) return "gemini-3.1-pro";
+    if (raw === "claude-sonnet-4-6") return "claude-sonnet-4-6";
+    if (raw.startsWith("claude-opus-4-6")) return "claude-opus-4-6-thinking";
+    if (raw.startsWith("gpt-oss-120b")) return "gpt-oss-120b";
+
+    const found = AGYClient.AVAILABLE_MODELS.find((m) => m.id === raw);
+    return found ? found.id : "gemini-3.8-flash";
   }
 
   static setModel(model: string): void {
     Zotero.Prefs.set(`${addon.data.config.prefsPrefix}.model`, model, true);
+  }
+
+  static getEffort(): string {
+    const raw = (
+      Zotero.Prefs.get(
+        `${addon.data.config.prefsPrefix}.effort`,
+        true,
+      ) as string
+    )?.trim();
+    if (raw && ["high", "medium", "low"].includes(raw)) {
+      return raw;
+    }
+    // Check if legacy model had suffix
+    const legacyModel = (
+      Zotero.Prefs.get(`${addon.data.config.prefsPrefix}.model`, true) as string
+    )?.trim();
+    if (legacyModel?.endsWith("-low")) return "low";
+    if (legacyModel?.endsWith("-medium")) return "medium";
+    if (legacyModel?.endsWith("-high")) return "high";
+
+    return "high";
+  }
+
+  static setEffort(effort: string): void {
+    Zotero.Prefs.set(`${addon.data.config.prefsPrefix}.effort`, effort, true);
   }
 
   static async sendMessage(

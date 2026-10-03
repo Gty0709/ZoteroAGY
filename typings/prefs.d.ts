@@ -9,6 +9,7 @@ declare namespace _ZoteroTypes {
     PluginPrefsMap: {
       "cliPath": string;
       "model": string;
+      "effort": string;
       "language": string;
       "autoContext": boolean;
       "saveHistory": boolean;

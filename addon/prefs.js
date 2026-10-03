@@ -1,5 +1,6 @@
 pref("extensions.zotero.zoteroagy.cliPath", "");
-pref("extensions.zotero.zoteroagy.model", "gemini-3.8-flash-high");
+pref("extensions.zotero.zoteroagy.model", "gemini-3.8-flash");
+pref("extensions.zotero.zoteroagy.effort", "high");
 pref("extensions.zotero.zoteroagy.language", "zh-CN");
 pref("extensions.zotero.zoteroagy.autoContext", true);
 pref("extensions.zotero.zoteroagy.saveHistory", true);

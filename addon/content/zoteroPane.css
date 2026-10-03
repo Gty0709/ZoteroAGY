@@ -200,7 +200,8 @@ collapsible-section[data-pane*="agy-chat"][open] {
   padding: 6px 10px !important;
   background: rgba(43, 127, 255, 0.06) !important;
   border-top: 1px solid var(--material-border, rgba(0, 0, 0, 0.08)) !important;
-  max-height: 80px !important;
+  max-height: calc(var(--agy-font-size, 14px) * 6.5) !important;
+  min-height: 0 !important;
   overflow-y: auto !important;
   flex-shrink: 0 !important;
 }
@@ -208,24 +209,96 @@ collapsible-section[data-pane*="agy-chat"][open] {
 .agy-context-tag {
   display: inline-flex !important;
   align-items: center !important;
-  gap: 5px !important;
+  gap: 6px !important;
   background: #e8f0fe !important;
   color: #1967d2 !important;
-  font-size: calc(var(--agy-font-size, 14px) * 0.82) !important;
-  padding: 2px 8px !important;
-  border-radius: 12px !important;
-  max-width: 220px !important;
+  font-size: calc(var(--agy-font-size, 14px) * 0.85) !important;
+  padding: calc(var(--agy-font-size, 14px) * 0.2) calc(var(--agy-font-size, 14px) * 0.6) !important;
+  border-radius: calc(var(--agy-font-size, 14px) * 0.8) !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
   white-space: nowrap !important;
+  border: 1px solid rgba(25, 103, 210, 0.25) !important;
+  line-height: 1.3 !important;
+  transition: background 0.15s ease, border-color 0.15s ease !important;
+}
+
+.agy-context-tag:hover {
+  background: #dbe7fc !important;
+  border-color: rgba(25, 103, 210, 0.45) !important;
+}
+
+.agy-context-label {
   overflow: hidden !important;
   text-overflow: ellipsis !important;
-  border: 1px solid rgba(25, 103, 210, 0.2) !important;
+  white-space: nowrap !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
 }
 
 .agy-context-close {
+  flex-shrink: 0 !important;
   cursor: pointer !important;
   font-weight: bold !important;
+  font-size: calc(var(--agy-font-size, 14px) * 1.05) !important;
+  line-height: 1 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: calc(var(--agy-font-size, 14px) * 1.25) !important;
+  height: calc(var(--agy-font-size, 14px) * 1.25) !important;
+  border-radius: 50% !important;
   color: #1967d2 !important;
-  margin-left: 2px !important;
+  margin-left: 4px !important;
+  user-select: none !important;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease !important;
+}
+
+.agy-context-close:hover {
+  background: rgba(217, 48, 37, 0.15) !important;
+  color: #d93025 !important;
+  transform: scale(1.15) !important;
+}
+
+.agy-selectors-group {
+  display: flex !important;
+  gap: 6px !important;
+  align-items: center !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  max-width: calc(100% - 85px) !important;
+}
+
+.agy-model-select,
+.agy-effort-select {
+  padding: calc(var(--agy-font-size, 14px) * 0.25) calc(var(--agy-font-size, 14px) * 0.45) !important;
+  border: 1px solid var(--material-border, rgba(0, 0, 0, 0.18)) !important;
+  border-radius: 4px !important;
+  font-size: calc(var(--agy-font-size, 14px) * 0.82) !important;
+  background: var(--material-background, #ffffff) !important;
+  color: var(--material-text-primary, #333333) !important;
+  outline: none !important;
+  cursor: pointer !important;
+  box-sizing: border-box !important;
+  white-space: nowrap !important;
+  text-overflow: ellipsis !important;
+  overflow: hidden !important;
+}
+
+.agy-model-select {
+  flex: 3 1 0% !important;
+  min-width: 0 !important;
+}
+
+.agy-effort-select {
+  flex: 2 1 0% !important;
+  min-width: 0 !important;
+}
+
+.agy-effort-select:disabled {
+  opacity: 0.55 !important;
+  cursor: not-allowed !important;
+  background: rgba(0, 0, 0, 0.04) !important;
 }
 
 .agy-input-container {
