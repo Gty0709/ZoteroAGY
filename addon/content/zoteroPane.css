@@ -114,6 +114,9 @@ collapsible-section[data-pane*="agy-chat"][open] {
   flex-direction: column !important;
   gap: 12px !important;
   background: var(--material-background, var(--fill-secondary, #f8f9fa)) !important;
+  -moz-user-select: text !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
 }
 
 .agy-msg {
@@ -121,6 +124,9 @@ collapsible-section[data-pane*="agy-chat"][open] {
   flex-direction: column !important;
   max-width: 88% !important;
   animation: agyFadeIn 0.12s ease-out !important;
+  -moz-user-select: text !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
 }
 
 @keyframes agyFadeIn {
@@ -141,6 +147,9 @@ collapsible-section[data-pane*="agy-chat"][open] {
   max-width: 95% !important;
   font-size: calc(var(--agy-font-size, 14px) * 0.82) !important;
   color: var(--material-text-secondary, #888) !important;
+  -moz-user-select: text !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
 }
 
 .agy-bubble {
@@ -149,6 +158,16 @@ collapsible-section[data-pane*="agy-chat"][open] {
   line-height: 1.6 !important;
   word-break: break-word !important;
   font-family: var(--agy-font-family) !important;
+  cursor: text !important;
+  -moz-user-select: text !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
+.agy-bubble * {
+  -moz-user-select: text !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
 }
 
 .agy-msg-user .agy-bubble {
@@ -325,6 +344,9 @@ collapsible-section[data-pane*="agy-chat"][open] {
   max-height: 120px !important;
   background: var(--material-background, #ffffff) !important;
   color: var(--material-text-primary, #222) !important;
+  -moz-user-select: text !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
 }
 
 .agy-textarea:focus {
@@ -530,6 +552,9 @@ collapsible-section[data-pane*="agy-chat"][open] {
   font-family: Consolas, "Cascadia Code", "Fira Code", monospace !important;
   font-size: calc(var(--agy-font-size, 14px) * 0.9) !important;
   line-height: 1.55 !important;
+  -moz-user-select: text !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
 }
 
 .agy-code-wrapper code {
@@ -537,6 +562,9 @@ collapsible-section[data-pane*="agy-chat"][open] {
   padding: 0 !important;
   color: inherit !important;
   font-family: inherit !important;
+  -moz-user-select: text !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
 }
 
 /* Obsidian Inline Code */

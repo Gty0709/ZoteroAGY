@@ -27,7 +27,7 @@ export class StandaloneWindow {
       "scrollbars=no",
       "status=no",
       "dialog=no",
-      keepOnTop ? "alwaysRaised=yes" : "",
+      keepOnTop ? "alwaysRaised=yes,alwaysRaised" : "",
     ]
       .filter(Boolean)
       .join(",");
@@ -48,6 +48,9 @@ export class StandaloneWindow {
 
     await dialogData.loadLock.promise;
 
+    // Apply always-on-top flags to window
+    StandaloneWindow.setWindowAlwaysOnTop(win, keepOnTop);
+
     const root = win.document.getElementById(
       "zoteroagy-standalone-root",
     ) as HTMLElement;
@@ -58,6 +61,21 @@ export class StandaloneWindow {
       ChatView.renderHistoryForPanel(this.panelInstance);
       ChatView.renderContextsForPanel(this.panelInstance);
       ChatView.updateAuthStatusForPanel(this.panelInstance);
+
+      if (this.panelInstance.pinButton) {
+        this.panelInstance.pinButton.textContent = keepOnTop
+          ? "📌 已置顶"
+          : "📍 未置顶";
+        this.panelInstance.pinButton.style.color = keepOnTop
+          ? "#188038"
+          : "#666";
+        this.panelInstance.pinButton.style.borderColor = keepOnTop
+          ? "#188038"
+          : "rgba(0,0,0,0.18)";
+        this.panelInstance.pinButton.title = keepOnTop
+          ? "当前状态：已置顶在屏幕最前端（点击取消置顶）"
+          : "当前状态：未置顶（点击开启屏幕置顶）";
+      }
     }
 
     win.addEventListener("unload", () => {
@@ -70,6 +88,71 @@ export class StandaloneWindow {
 
     win.focus();
     return win;
+  }
+
+  public static setWindowAlwaysOnTop(win: Window, onTop: boolean): boolean {
+    if (!win) return false;
+    let applied = false;
+
+    // 1. Set level and alwaysraised attributes on root XUL element
+    try {
+      const docEl = win.document?.documentElement;
+      if (docEl) {
+        docEl.setAttribute("level", onTop ? "top" : "normal");
+        docEl.setAttribute("alwaysraised", onTop ? "true" : "false");
+        applied = true;
+      }
+    } catch (_) {}
+
+    // 2. Query nsIAppWindow / nsIXULWindow interface
+    try {
+      const Ci = (Components as any)?.interfaces;
+      let appWin: any = null;
+
+      try {
+        const treeOwner = (win as any)?.docShell?.treeOwner;
+        appWin = treeOwner
+          ?.QueryInterface?.(Ci?.nsIInterfaceRequestor)
+          ?.getInterface?.(Ci?.nsIAppWindow || Ci?.nsIXULWindow);
+      } catch (_) {}
+
+      if (!appWin) {
+        try {
+          const wm = (Services as any)?.wm;
+          appWin = wm?.getAppWindowFor?.(win) || wm?.getXULWindowFor?.(win);
+        } catch (_) {}
+      }
+
+      if (appWin) {
+        try {
+          const CHROME_ALWAYS_ON_TOP =
+            Ci?.nsIWebBrowserChrome?.CHROME_ALWAYS_ON_TOP ?? 524288;
+          if (onTop) {
+            appWin.chromeFlags |= CHROME_ALWAYS_ON_TOP;
+          } else {
+            appWin.chromeFlags &= ~CHROME_ALWAYS_ON_TOP;
+          }
+        } catch (_) {}
+
+        try {
+          const highestZ =
+            Ci?.nsIAppWindow?.highestZ ?? Ci?.nsIXULWindow?.highestZ ?? 9;
+          const normalZ =
+            Ci?.nsIAppWindow?.normalZ ?? Ci?.nsIXULWindow?.normalZ ?? 5;
+          appWin.zLevel = onTop ? highestZ : normalZ;
+        } catch (_) {}
+        applied = true;
+      }
+    } catch (_) {}
+
+    // 3. Platform specific adjustments
+    if (onTop && (Zotero as any).isLinux) {
+      try {
+        win.focus();
+      } catch (_) {}
+    }
+
+    return applied;
   }
 
   public static async togglePin(): Promise<void> {
@@ -86,20 +169,7 @@ export class StandaloneWindow {
     );
 
     if (this.isOpen() && this.win) {
-      let applied = false;
-      try {
-        const ifaces = (Components as any)?.interfaces;
-        const treeOwner = (this.win as any)?.docShell?.treeOwner;
-        const xulWin = treeOwner
-          ?.QueryInterface?.(ifaces?.nsIInterfaceRequestor)
-          ?.getInterface?.(ifaces?.nsIXULWindow);
-        if (xulWin && ifaces?.nsIXULWindow) {
-          xulWin.zLevel = next
-            ? ifaces.nsIXULWindow.raisedZ
-            : ifaces.nsIXULWindow.normalZ;
-          applied = true;
-        }
-      } catch (e) {}
+      StandaloneWindow.setWindowAlwaysOnTop(this.win, next);
 
       // Update button visual
       if (this.panelInstance?.pinButton) {
@@ -122,12 +192,6 @@ export class StandaloneWindow {
           progress: 100,
         })
         .show(2000);
-
-      if (!applied) {
-        // Reopen window to apply alwaysRaised flag
-        this.win.close();
-        setTimeout(() => this.open(), 100);
-      }
     }
   }
 

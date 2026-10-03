@@ -486,6 +486,14 @@ export class ChatView {
     ChatView.panels.delete(instance);
   }
 
+  public static cleanupPanels(): void {
+    for (const p of Array.from(ChatView.panels)) {
+      if (!p.panel || !p.panel.isConnected) {
+        ChatView.panels.delete(p);
+      }
+    }
+  }
+
   public static getFontSize(): number {
     try {
       const saved = Zotero.Prefs.get(
@@ -594,16 +602,20 @@ export class ChatView {
   }
 
   public static refreshAllHistoryDrawers(): void {
+    ChatView.cleanupPanels();
     for (const p of ChatView.panels) {
-      if (p.historyDrawer?.classList.contains("open")) {
+      if (p.panel?.isConnected && p.historyDrawer?.classList.contains("open")) {
         ChatView.renderHistoryDrawer(p);
       }
     }
   }
 
   public static async updateAuthStatus(): Promise<void> {
+    ChatView.cleanupPanels();
     for (const p of ChatView.panels) {
-      await ChatView.updateAuthStatusForPanel(p);
+      if (p.panel?.isConnected) {
+        await ChatView.updateAuthStatusForPanel(p);
+      }
     }
   }
 
@@ -638,8 +650,11 @@ export class ChatView {
   }
 
   public static renderContexts(): void {
+    ChatView.cleanupPanels();
     for (const p of ChatView.panels) {
-      ChatView.renderContextsForPanel(p);
+      if (p.panel?.isConnected) {
+        ChatView.renderContextsForPanel(p);
+      }
     }
   }
 
@@ -681,8 +696,11 @@ export class ChatView {
   }
 
   public static renderHistory(): void {
+    ChatView.cleanupPanels();
     for (const p of ChatView.panels) {
-      ChatView.renderHistoryForPanel(p);
+      if (p.panel?.isConnected) {
+        ChatView.renderHistoryForPanel(p);
+      }
     }
   }
 
@@ -744,20 +762,25 @@ export class ChatView {
     triggerInstance.inputElement.value = "";
     const contexts = [...ContextManager.getContexts()];
 
+    ChatView.cleanupPanels();
+
     // Add user message to history
     const userMsg = ChatManager.addMessage("user", text, contexts);
 
-    // Sync user message to all panels
+    // Sync user message to all active panels
     for (const p of ChatView.panels) {
-      const emptyTip = p.messagesContainer?.querySelector(".agy-empty-tip");
-      if (emptyTip) emptyTip.remove();
-      ChatView.appendMessageDOM(p, "user", text, userMsg.id, contexts);
+      if (p.panel?.isConnected && p.messagesContainer) {
+        const emptyTip = p.messagesContainer.querySelector(".agy-empty-tip");
+        if (emptyTip) emptyTip.remove();
+        ChatView.appendMessageDOM(p, "user", text, userMsg.id, contexts);
+      }
     }
 
     // Prepare full prompt with system instructions for tools & mermaid
     const systemCapabilities = [
       "【系统能力与指令】",
       "你是基于 Antigravity CLI 的学术研究助手 Zotero AGY。",
+      "请直接专注于学术文献阅读、论文问答、数学推导与知识解答。除非用户明确要求操作本地文件，否则请直接回答用户的问题，无需执行本地终端命令或探索工作区文件。",
       "1. 联网搜索：当需要检索最新学术动态、专业概念或外部网页资料时，请主动调用 search_web 或 read_url_content。",
       "2. Zotero 本地库交互 (zotero-mcp)：已连接本地 Zotero MCP 服务。需要检索文献条目、获取论文元数据/全文、提取笔记或写入标签与笔记时，请主动调用 zotero-mcp 工具。",
       '3. 流程图与图表渲染：若需要用流程图、时序图或架构图解释概念与工作流，请输出 ```mermaid 代码块。注意：子图名称与节点文本均必须用双引号包裹（如 subgraph sub1 ["客户端 (Client)"]、A["用户请求 (Client)"]、[("数据库")]），以保证语法完全规范，界面会自动渲染为可视化矢量图表。',
@@ -783,9 +806,11 @@ export class ChatView {
     const responseMsgId = Date.now().toString(36);
     const bubbleElements: HTMLElement[] = [];
     for (const p of ChatView.panels) {
-      bubbleElements.push(
-        ChatView.appendMessageDOM(p, "assistant", "...", responseMsgId),
-      );
+      if (p.panel?.isConnected) {
+        bubbleElements.push(
+          ChatView.appendMessageDOM(p, "assistant", "...", responseMsgId),
+        );
+      }
     }
 
     let fullResponse = "";
@@ -798,17 +823,25 @@ export class ChatView {
             fullResponse += chunk;
             for (let i = 0; i < bubbleElements.length; i++) {
               const b = bubbleElements[i];
-              if (b && b.ownerDocument) {
-                NoteFormatter.renderToDOM(
-                  b.ownerDocument,
-                  fullResponse,
-                  b,
-                  true,
-                );
+              if (b && b.isConnected && b.ownerDocument) {
+                try {
+                  NoteFormatter.renderToDOM(
+                    b.ownerDocument,
+                    fullResponse,
+                    b,
+                    true,
+                  );
+                } catch (renderErr) {
+                  b.textContent = fullResponse;
+                }
               }
             }
             for (const p of ChatView.panels) {
-              ChatView.scrollToBottom(p);
+              if (p.panel?.isConnected) {
+                try {
+                  ChatView.scrollToBottom(p);
+                } catch (_) {}
+              }
             }
           }
         },
@@ -830,29 +863,37 @@ export class ChatView {
       ChatView.refreshAllHistoryDrawers();
 
       for (const b of bubbleElements) {
-        if (b && b.ownerDocument) {
-          NoteFormatter.renderToDOM(b.ownerDocument, fullResponse, b, false);
-          if (b.parentElement) {
-            ChatView.attachActionButtons(
-              b.ownerDocument,
-              b.parentElement as HTMLElement,
-              fullResponse,
-              text,
-              contexts,
-            );
+        if (b && b.isConnected && b.ownerDocument) {
+          try {
+            NoteFormatter.renderToDOM(b.ownerDocument, fullResponse, b, false);
+            if (b.parentElement) {
+              ChatView.attachActionButtons(
+                b.ownerDocument,
+                b.parentElement as HTMLElement,
+                fullResponse,
+                text,
+                contexts,
+              );
+            }
+          } catch (renderErr) {
+            b.textContent = fullResponse;
           }
         }
       }
     } catch (e: any) {
       debugLog("ChatView.handleSend ERROR: " + (e?.stack || e?.message || e));
       for (const b of bubbleElements) {
-        if (b.ownerDocument) {
-          NoteFormatter.renderToDOM(
-            b.ownerDocument,
-            `**[错误]** ${e.message}`,
-            b,
-            false,
-          );
+        if (b && b.isConnected && b.ownerDocument) {
+          try {
+            NoteFormatter.renderToDOM(
+              b.ownerDocument,
+              `**[错误]** ${e.message}`,
+              b,
+              false,
+            );
+          } catch (_) {
+            b.textContent = `[错误] ${e.message}`;
+          }
         }
       }
       ChatManager.addMessage("system", `Error: ${e.message}`);
@@ -864,7 +905,11 @@ export class ChatView {
       ChatView.isStreaming = false;
       for (const p of ChatView.panels) {
         if (p.sendButton) p.sendButton.disabled = false;
-        ChatView.scrollToBottom(p);
+        if (p.panel?.isConnected) {
+          try {
+            ChatView.scrollToBottom(p);
+          } catch (_) {}
+        }
       }
     }
   }
@@ -890,7 +935,8 @@ export class ChatView {
     );
     if (role === "assistant") {
       if (content === "...") {
-        bubble.textContent = "...";
+        bubble.innerHTML =
+          '<span class="agy-thinking-dots" style="color: #666; font-style: italic;">💭 正在深度思考并组织回答...</span>';
       } else {
         NoteFormatter.renderToDOM(doc, content, bubble, false);
       }

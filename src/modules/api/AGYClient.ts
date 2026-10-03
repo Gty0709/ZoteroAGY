@@ -292,6 +292,7 @@ export class AGYClient {
       stdin: "pipe",
       stdout: "pipe",
       stderr: "pipe",
+      workdir: AGYClient.getHomeDir() || null,
     };
 
     if (!Zotero.isWin) {
@@ -307,6 +308,18 @@ export class AGYClient {
     }
 
     const proc = await Subprocess.call(procOptions);
+
+    // Concurrently consume stderr to prevent OS pipe buffer deadlocks
+    let stderr = "";
+    const stderrPromise = (async () => {
+      try {
+        while (true) {
+          const errChunk: string = await proc.stderr.readString();
+          if (!errChunk) break;
+          stderr += errChunk;
+        }
+      } catch (_) {}
+    })();
 
     // Write prompt into stdin and close write stream
     await proc.stdin.write(prompt);
@@ -339,12 +352,25 @@ export class AGYClient {
             if (data.result?.conversation_id) {
               capturedAgyConvId = data.result.conversation_id;
             }
-            if (data.result?.response && !fullResponse) {
-              fullResponse = data.result.response;
-              onChunk(fullResponse, false);
+            if (data.result?.status === "ERROR") {
+              const errMsg = data.result?.error || "AI 模型响应错误";
+              throw new Error(errMsg);
+            }
+            if (data.result?.response) {
+              if (
+                !fullResponse ||
+                data.result.response.length >= fullResponse.length
+              ) {
+                fullResponse = data.result.response;
+                onChunk(fullResponse, false);
+              }
             }
           }
-        } catch (_) {}
+        } catch (e: any) {
+          if (e?.message && e.message.startsWith("error:")) {
+            throw e;
+          }
+        }
       }
     }
 
@@ -354,26 +380,42 @@ export class AGYClient {
         if (data.event === "step_update" && data.step_update?.text_delta) {
           fullResponse += data.step_update.text_delta;
           onChunk(data.step_update.text_delta, false);
-        } else if (
-          data.event === "result" &&
-          data.result?.response &&
-          !fullResponse
-        ) {
-          fullResponse = data.result.response;
-          onChunk(fullResponse, false);
+        } else if (data.event === "result") {
+          if (data.result?.status === "ERROR") {
+            throw new Error(data.result?.error || "AI 模型响应错误");
+          }
+          if (data.result?.response) {
+            if (
+              !fullResponse ||
+              data.result.response.length >= fullResponse.length
+            ) {
+              fullResponse = data.result.response;
+              onChunk(fullResponse, false);
+            }
+          }
         }
-      } catch (_) {}
+      } catch (err: any) {
+        if (err?.message && err.message.startsWith("error:")) {
+          throw err;
+        }
+      }
     }
 
     const { exitCode } = await proc.wait();
+    await stderrPromise;
+
     if (exitCode !== 0 && !fullResponse) {
-      let stderr = "";
-      try {
-        stderr = await proc.stderr.readString();
-      } catch (_) {}
       throw new Error(
-        `Antigravity CLI 执行失败 (exit ${exitCode}): ${stderr || "未收到有效输出"}`,
+        `Antigravity CLI 执行失败 (exit ${exitCode}): ${stderr.trim() || "未收到有效输出"}`,
       );
+    }
+
+    if (!fullResponse) {
+      if (stderr.trim()) {
+        throw new Error(`Antigravity CLI 返回错误: ${stderr.trim()}`);
+      } else {
+        throw new Error("Antigravity CLI 未返回回答内容，请检查连接或重试。");
+      }
     }
 
     onChunk("", true);
