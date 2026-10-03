@@ -26,7 +26,7 @@ export class StandaloneWindow {
       "resizable=yes",
       "scrollbars=no",
       "status=no",
-      "dialog=no",
+      keepOnTop ? "dependent=yes" : "dialog=no",
       keepOnTop ? "alwaysRaised=yes,alwaysRaised" : "",
     ]
       .filter(Boolean)
@@ -37,7 +37,8 @@ export class StandaloneWindow {
     };
 
     // Open standalone XUL window
-    const win = (Zotero.getMainWindow() as any).openDialog(
+    const mainWindow = Zotero.getMainWindow() as any;
+    const win = mainWindow.openDialog(
       `chrome://${addon.data.config.addonRef}/content/standalone.xhtml`,
       `${addon.data.config.addonRef}-standalone`,
       features,
@@ -50,6 +51,36 @@ export class StandaloneWindow {
 
     // Apply always-on-top flags to window
     StandaloneWindow.setWindowAlwaysOnTop(win, keepOnTop);
+
+    // On Linux, schedule native X11 window hints retries after window is fully mapped
+    if ((Zotero as any).isLinux) {
+      const title = win.document?.title || "AGY 智能助手";
+      StandaloneWindow.applyLinuxNativeAlwaysOnTop(title, keepOnTop);
+      win.setTimeout(() => {
+        StandaloneWindow.applyLinuxNativeAlwaysOnTop(title, keepOnTop);
+      }, 250);
+      win.setTimeout(() => {
+        StandaloneWindow.applyLinuxNativeAlwaysOnTop(title, keepOnTop);
+      }, 700);
+    }
+
+    // When main window is activated, ensure native keep-above hints remain intact
+    if (mainWindow) {
+      const onMainActivate = () => {
+        if (
+          StandaloneWindow.isOpen() &&
+          StandaloneWindow.isKeepOnTop() &&
+          (Zotero as any).isLinux
+        ) {
+          const title = win.document?.title || "AGY 智能助手";
+          StandaloneWindow.applyLinuxNativeAlwaysOnTop(title, true);
+        }
+      };
+      mainWindow.addEventListener("activate", onMainActivate);
+      win.addEventListener("unload", () => {
+        mainWindow.removeEventListener("activate", onMainActivate);
+      });
+    }
 
     const root = win.document.getElementById(
       "zoteroagy-standalone-root",
@@ -90,6 +121,71 @@ export class StandaloneWindow {
     return win;
   }
 
+  public static isKeepOnTop(): boolean {
+    return (
+      Zotero.Prefs.get(
+        `${addon.data.config.prefsPrefix}.keepWindowTop`,
+        true,
+      ) !== false
+    );
+  }
+
+  private static getSubprocess(): any {
+    try {
+      // @ts-ignore
+      return ChromeUtils.importESModule(
+        "resource://gre/modules/Subprocess.sys.mjs",
+      ).Subprocess;
+    } catch (_) {
+      try {
+        const scope: any = {};
+        // @ts-ignore
+        Components.utils.import("resource://gre/modules/Subprocess.jsm", scope);
+        return scope.Subprocess;
+      } catch (_) {
+        return null;
+      }
+    }
+  }
+
+  public static async applyLinuxNativeAlwaysOnTop(
+    title: string,
+    onTop: boolean,
+  ): Promise<void> {
+    if (!(Zotero as any).isLinux) return;
+    try {
+      const Subprocess = StandaloneWindow.getSubprocess();
+      if (!Subprocess) return;
+
+      const script = onTop
+        ? `
+AGY_ID=$(xwininfo -root -tree 2>/dev/null | grep -F "${title}" | head -n 1 | awk '{print $1}')
+if [ -n "$AGY_ID" ]; then
+  MAIN_ID=$(xwininfo -root -tree 2>/dev/null | grep -F " - Zotero" | head -n 1 | awk '{print $1}')
+  xprop -id "$AGY_ID" -f _NET_WM_STATE 32a -set _NET_WM_STATE _NET_WM_STATE_ABOVE 2>/dev/null
+  if [ -n "$MAIN_ID" ]; then
+    xprop -id "$AGY_ID" -f WM_TRANSIENT_FOR 32x -set WM_TRANSIENT_FOR "$MAIN_ID" 2>/dev/null
+  fi
+fi
+`
+        : `
+AGY_ID=$(xwininfo -root -tree 2>/dev/null | grep -F "${title}" | head -n 1 | awk '{print $1}')
+if [ -n "$AGY_ID" ]; then
+  xprop -id "$AGY_ID" -remove _NET_WM_STATE 2>/dev/null
+  xprop -id "$AGY_ID" -remove WM_TRANSIENT_FOR 2>/dev/null
+fi
+`;
+
+      const proc = await Subprocess.call({
+        command: "/bin/sh",
+        arguments: ["-c", script],
+        stdout: "ignore",
+        stderr: "ignore",
+      });
+      await proc.wait();
+    } catch (_) {}
+  }
+
   public static setWindowAlwaysOnTop(win: Window, onTop: boolean): boolean {
     if (!win) return false;
     let applied = false;
@@ -127,29 +223,24 @@ export class StandaloneWindow {
         try {
           const CHROME_ALWAYS_ON_TOP =
             Ci?.nsIWebBrowserChrome?.CHROME_ALWAYS_ON_TOP ?? 524288;
+          const CHROME_DEPENDENT =
+            Ci?.nsIWebBrowserChrome?.CHROME_DEPENDENT ?? 8388608;
           if (onTop) {
             appWin.chromeFlags |= CHROME_ALWAYS_ON_TOP;
+            appWin.chromeFlags |= CHROME_DEPENDENT;
           } else {
             appWin.chromeFlags &= ~CHROME_ALWAYS_ON_TOP;
+            appWin.chromeFlags &= ~CHROME_DEPENDENT;
           }
-        } catch (_) {}
-
-        try {
-          const highestZ =
-            Ci?.nsIAppWindow?.highestZ ?? Ci?.nsIXULWindow?.highestZ ?? 9;
-          const normalZ =
-            Ci?.nsIAppWindow?.normalZ ?? Ci?.nsIXULWindow?.normalZ ?? 5;
-          appWin.zLevel = onTop ? highestZ : normalZ;
         } catch (_) {}
         applied = true;
       }
     } catch (_) {}
 
     // 3. Platform specific adjustments
-    if (onTop && (Zotero as any).isLinux) {
-      try {
-        win.focus();
-      } catch (_) {}
+    if ((Zotero as any).isLinux) {
+      const title = win.document?.title || "AGY 智能助手";
+      StandaloneWindow.applyLinuxNativeAlwaysOnTop(title, onTop);
     }
 
     return applied;

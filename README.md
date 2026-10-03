@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Gty0709/ZoteroAGY/releases"><img src="https://img.shields.io/badge/Release-v1.2.3-2b7fff.svg" alt="Release" /></a>
+  <a href="https://github.com/Gty0709/ZoteroAGY/releases"><img src="https://img.shields.io/badge/Release-v1.2.4-2b7fff.svg" alt="Release" /></a>
   <a href="https://www.zotero.org/"><img src="https://img.shields.io/badge/Zotero-7.0%2B-red.svg" alt="Zotero" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg" alt="License" /></a>
   <img src="https://img.shields.io/badge/TypeScript-5.9-3178c6.svg" alt="TypeScript" />
