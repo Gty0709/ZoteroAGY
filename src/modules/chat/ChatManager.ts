@@ -53,12 +53,31 @@ export class ChatManager {
 
     let raw = firstUserMsg.content;
     raw = raw.replace(
-      /【系统能力与指令】[\s\S]*?(?=\[Active Context|\[User Question|$)/g,
+      /【系统(?:角色与科研执行准则|能力与指令)】[\s\S]*?(?=\[Active Context|\[当前研读文献|\[用户显式引用|--- 用户显式引用|\[Context Data|\[Context Information|\[User Question|\[User Request|$)/g,
       "",
     );
-    raw = raw.replace(/\[Active Context.*?\]/gs, "");
+    raw = raw.replace(
+      /\[当前研读文献[\s\S]*?(?=\[User Question|\[User Request|$)/g,
+      "",
+    );
+    raw = raw.replace(
+      /--- 用户显式引用[\s\S]*?(?=\[User Question|\[User Request|$)/g,
+      "",
+    );
+    raw = raw.replace(
+      /\[Active Context[\s\S]*?(?=\[User Question|\[User Request|$)/g,
+      "",
+    );
+    raw = raw.replace(
+      /\[Context Data[\s\S]*?(?=\[User Question|\[User Request|$)/g,
+      "",
+    );
+    raw = raw.replace(
+      /\[Context Information[\s\S]*?(?=\[User Question|\[User Request|$)/g,
+      "",
+    );
     raw = raw.replace(/\[User Question\]/g, "");
-    raw = raw.replace(/\[Context Information.*?\]/gs, "");
+    raw = raw.replace(/\[User Request\]/g, "");
     raw = raw.replace(/#+\s+/g, "");
     raw = raw.replace(/[`*_\n\r]/g, " ");
     raw = raw.trim();

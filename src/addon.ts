@@ -22,7 +22,7 @@ export interface Conversation {
 
 export interface ContextItem {
   id: string;
-  type: "selection" | "annotation" | "abstract" | "title";
+  type: "selection" | "annotation" | "abstract" | "title" | "note";
   text: string;
   source?: string;
   page?: number;

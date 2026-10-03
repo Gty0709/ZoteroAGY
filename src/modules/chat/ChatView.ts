@@ -5,6 +5,7 @@ import { NoteWriter } from "../notes/NoteWriter";
 import { NoteFormatter } from "../notes/NoteFormatter";
 import { OAuthManager } from "../auth/OAuthManager";
 import { StandaloneWindow } from "../window/StandaloneWindow";
+import { PromptTemplates } from "../features/PromptTemplates";
 import { debugLog } from "../../hooks";
 
 const HTML_NS = "http://www.w3.org/1999/xhtml";
@@ -675,12 +676,18 @@ export class ChatView {
       const tag = el(doc, "div", "agy-context-tag");
       tag.title = `[${ctx.type}] ${ctx.text}`;
 
+      let typeLabel = "划词";
+      if (ctx.type === "annotation") typeLabel = "批注";
+      else if (ctx.type === "note") typeLabel = "笔记";
+      else if (ctx.type === "title") typeLabel = "文献";
+      else if (ctx.type === "abstract") typeLabel = "摘要";
+
       const label = el(
         doc,
         "span",
         "agy-context-label",
         "",
-        `[${ctx.type === "annotation" ? "批注" : "划词"}${ctx.page ? ` p.${ctx.page}` : ""}] ${ctx.text.slice(0, 24)}`,
+        `[${typeLabel}${ctx.page ? ` p.${ctx.page}` : ""}] ${ctx.text.slice(0, 24)}`,
       );
       const close = el(doc, "span", "agy-context-close", "", "×");
       close.title = "移除此上下文";
@@ -777,20 +784,22 @@ export class ChatView {
     }
 
     // Prepare full prompt with system instructions for tools & mermaid
-    const systemCapabilities = [
-      "【系统能力与指令】",
-      "你是基于 Antigravity CLI 的学术研究助手 Zotero AGY。",
-      "请直接专注于学术文献阅读、论文问答、数学推导与知识解答。除非用户明确要求操作本地文件，否则请直接回答用户的问题，无需执行本地终端命令或探索工作区文件。",
-      "1. 联网搜索：当需要检索最新学术动态、专业概念或外部网页资料时，请主动调用 search_web 或 read_url_content。",
-      "2. Zotero 本地库交互 (zotero-mcp)：已连接本地 Zotero MCP 服务。需要检索文献条目、获取论文元数据/全文、提取笔记或写入标签与笔记时，请主动调用 zotero-mcp 工具。",
-      '3. 流程图与图表渲染：若需要用流程图、时序图或架构图解释概念与工作流，请输出 ```mermaid 代码块。注意：子图名称与节点文本均必须用双引号包裹（如 subgraph sub1 ["客户端 (Client)"]、A["用户请求 (Client)"]、[("数据库")]），以保证语法完全规范，界面会自动渲染为可视化矢量图表。',
-      "4. 排版与公式：支持完整 Obsidian 风格语法、Callout 提示框以及 LaTeX 数学公式（$行内公式$、$$行间公式$$）。",
-    ].join("\n");
+    const systemCapabilities = PromptTemplates.getSystemPrompt();
+
+    const contextText = ContextManager.formatContextsForPrompt();
+    const activeDocText = await ContextManager.getActiveItemContext();
+
+    const contextSections: string[] = [];
+    if (activeDocText) {
+      contextSections.push(activeDocText);
+    }
+    if (contextText) {
+      contextSections.push(contextText);
+    }
 
     let fullPrompt = "";
-    const contextText = ContextManager.formatContextsForPrompt();
-    if (contextText) {
-      fullPrompt = `${systemCapabilities}\n\n[Active Context / 选中文献或批注]\n${contextText}\n\n[User Question]\n${text}`;
+    if (contextSections.length > 0) {
+      fullPrompt = `${systemCapabilities}\n\n${contextSections.join("\n\n")}\n\n[User Question]\n${text}`;
     } else {
       fullPrompt = `${systemCapabilities}\n\n[User Question]\n${text}`;
     }

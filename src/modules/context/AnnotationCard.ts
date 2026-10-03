@@ -18,6 +18,20 @@ export class AnnotationCard {
             for (const item of items) {
               if (item.isRegularItem()) {
                 await ContextManager.addAutoContext(item.id);
+              } else if (item.isNote()) {
+                const raw = (item.getNote() as string) || "";
+                const text = raw
+                  .replace(/<[^>]+>/g, " ")
+                  .replace(/\s+/g, " ")
+                  .trim();
+                if (text) {
+                  ContextManager.addContext({
+                    type: "note",
+                    text: text.slice(0, 2000),
+                    itemKey: item.key,
+                    source: "Zotero 笔记",
+                  });
+                }
               } else if (item.isAnnotation?.()) {
                 const text =
                   item.annotationText || item.annotationComment || "";

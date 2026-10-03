@@ -3,6 +3,7 @@ import { ChatManager } from "./ChatManager";
 import { ContextManager } from "../context/ContextManager";
 import { NoteWriter } from "../notes/NoteWriter";
 import { OAuthManager } from "../auth/OAuthManager";
+import { PromptTemplates } from "../features/PromptTemplates";
 
 export class ChatUI {
   /** Handle incoming messages from the sidebar HTML */
@@ -70,11 +71,24 @@ export class ChatUI {
       data: userMsg,
     });
 
-    // Format the prompt
-    let fullPrompt = text;
+    // Format the prompt with full system instructions & contexts
+    const systemCapabilities = PromptTemplates.getSystemPrompt();
     const contextText = ContextManager.formatContextsForPrompt();
+    const activeDocText = await ContextManager.getActiveItemContext();
+
+    const contextSections: string[] = [];
+    if (activeDocText) {
+      contextSections.push(activeDocText);
+    }
     if (contextText) {
-      fullPrompt = `[Context Data]\n${contextText}\n\n[User Request]\n${text}`;
+      contextSections.push(contextText);
+    }
+
+    let fullPrompt = "";
+    if (contextSections.length > 0) {
+      fullPrompt = `${systemCapabilities}\n\n${contextSections.join("\n\n")}\n\n[User Request]\n${text}`;
+    } else {
+      fullPrompt = `${systemCapabilities}\n\n[User Request]\n${text}`;
     }
 
     const conversation = ChatManager.getActiveConversation();
