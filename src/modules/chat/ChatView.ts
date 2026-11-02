@@ -325,6 +325,11 @@ export class ChatView {
 
     // Dual Quota Meters (周配额 & 5h窗口配额)
     const quotaGroup = el(doc, "div", "agy-quota-group");
+    quotaGroup.title = "点击即时查询刷新当前配额";
+    quotaGroup.style.cursor = "pointer";
+    quotaGroup.addEventListener("click", () => {
+      ChatView.refreshLiveQuota();
+    });
 
     // Week Quota (周)
     const weekMeter = el(doc, "div", "agy-quota-meter agy-quota-week");
@@ -335,7 +340,8 @@ export class ChatView {
     weekBar.appendChild(weekFill);
     const weekVal = el(doc, "span", "agy-quota-pct", "", "0%");
     weekMeter.append(weekLabel, weekBar, weekVal);
-    weekMeter.addEventListener("click", () => {
+    weekMeter.addEventListener("click", (e: any) => {
+      e?.stopPropagation?.();
       ChatView.refreshLiveQuota();
     });
 
@@ -348,7 +354,8 @@ export class ChatView {
     fiveHourBar.appendChild(fiveHourFill);
     const fiveHourVal = el(doc, "span", "agy-quota-pct", "", "0%");
     fiveHourMeter.append(fiveHourLabel, fiveHourBar, fiveHourVal);
-    fiveHourMeter.addEventListener("click", () => {
+    fiveHourMeter.addEventListener("click", (e: any) => {
+      e?.stopPropagation?.();
       ChatView.refreshLiveQuota();
     });
 
@@ -611,6 +618,8 @@ export class ChatView {
       }
       ChatView.syncModelAndEffortSelectors();
       ChatView.updateAllContextMeters();
+      // When model changes, refresh quota bucket (e.g. Gemini vs Claude on AGY)
+      ChatView.refreshLiveQuota(engine);
     });
 
     instance.effortSelectElement.addEventListener("change", (e: any) => {
@@ -734,7 +743,10 @@ export class ChatView {
     await ChatView.updateAuthStatus();
     ChatView.syncModelAndEffortSelectors();
     ChatView.updateAllContextMeters();
-    ChatView.updateAllQuotaMeters();
+    // 1. Immediately switch quota meter display to the new engine's cached values
+    ChatView.updateAllQuotaMeters(QuotaManager.getState(newEngine));
+    // 2. Refresh live quota in background for the new engine
+    ChatView.refreshLiveQuota(newEngine);
 
     try {
       new ztoolkit.ProgressWindow(addon.data.config.addonName)
@@ -750,7 +762,10 @@ export class ChatView {
     } catch (_) {}
   }
 
-  public static async refreshLiveQuota(): Promise<void> {
+  public static async refreshLiveQuota(
+    targetEngine?: "agy" | "claude",
+  ): Promise<void> {
+    const engine = targetEngine || ChatManager.getActiveEngine();
     try {
       for (const p of ChatView.panels) {
         if (p.weekQuotaElement) {
@@ -762,7 +777,7 @@ export class ChatView {
           if (pct) pct.textContent = "...";
         }
       }
-      const updated = await QuotaManager.refreshQuota();
+      const updated = await QuotaManager.refreshQuota(engine);
       ChatView.updateAllQuotaMeters(updated);
     } catch (e: any) {
       debugLog("refreshLiveQuota error: " + e.message);
@@ -773,6 +788,16 @@ export class ChatView {
     instance: AGYPanelInstance,
     state: QuotaState,
   ): void {
+    const engine = ChatManager.getActiveEngine();
+    const effectiveState =
+      state.activeBackend === engine ? state : QuotaManager.getState(engine);
+
+    const backendLabel =
+      effectiveState.activeBackend === "claude" ? "Claude Code" : "AGY CLI";
+    const catLabel = effectiveState.category
+      ? ` [${effectiveState.category}]`
+      : "";
+
     if (instance.weekQuotaElement) {
       const fill = instance.weekQuotaElement.querySelector(
         ".agy-quota-fill",
@@ -780,9 +805,11 @@ export class ChatView {
       const text = instance.weekQuotaElement.querySelector(
         ".agy-quota-pct",
       ) as HTMLElement;
-      if (fill) fill.style.width = `${Math.min(100, Math.max(0, state.weekPercent))}%`;
-      if (text) text.textContent = `${state.weekPercent}%`;
-      instance.weekQuotaElement.title = `周配额使用率: ${state.weekPercent}%\n${state.weekResetsAt ? `重置时间: ${state.weekResetsAt}` : ""}\n点击即时查询刷新配额`;
+      if (fill) {
+        fill.style.width = `${Math.min(100, Math.max(0, effectiveState.weekPercent))}%`;
+      }
+      if (text) text.textContent = `${effectiveState.weekPercent}%`;
+      instance.weekQuotaElement.title = `${backendLabel}${catLabel} 周配额使用率: ${effectiveState.weekPercent}%\n${effectiveState.weekResetsAt ? `重置时间: ${effectiveState.weekResetsAt}` : ""}\n点击即时查询刷新配额`;
     }
 
     if (instance.fiveHourQuotaElement) {
@@ -792,9 +819,11 @@ export class ChatView {
       const text = instance.fiveHourQuotaElement.querySelector(
         ".agy-quota-pct",
       ) as HTMLElement;
-      if (fill) fill.style.width = `${Math.min(100, Math.max(0, state.fiveHourPercent))}%`;
-      if (text) text.textContent = `${state.fiveHourPercent}%`;
-      instance.fiveHourQuotaElement.title = `5小时滑动窗口配额: ${state.fiveHourPercent}%\n${state.fiveHourResetsAt ? `重置时间: ${state.fiveHourResetsAt}` : ""}\n点击即时查询刷新配额`;
+      if (fill) {
+        fill.style.width = `${Math.min(100, Math.max(0, effectiveState.fiveHourPercent))}%`;
+      }
+      if (text) text.textContent = `${effectiveState.fiveHourPercent}%`;
+      instance.fiveHourQuotaElement.title = `${backendLabel}${catLabel} 5小时滑动窗口配额: ${effectiveState.fiveHourPercent}%\n${effectiveState.fiveHourResetsAt ? `重置时间: ${effectiveState.fiveHourResetsAt}` : ""}\n点击即时查询刷新配额`;
     }
   }
 
@@ -1254,7 +1283,8 @@ export class ChatView {
         }
       }
       ChatView.updateAllContextMeters();
-      ChatView.updateAllQuotaMeters();
+      // Automatically refresh live quota after answering every question
+      ChatView.refreshLiveQuota(currentEngine);
     } catch (e: any) {
       debugLog("ChatView.handleSend ERROR: " + (e?.stack || e?.message || e));
       for (const b of bubbleElements) {

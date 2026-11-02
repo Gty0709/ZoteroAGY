@@ -1,4 +1,5 @@
 import { ChatView, AGYPanelInstance } from "../chat/ChatView";
+import { QuotaManager } from "../api/QuotaManager";
 
 export class StandaloneWindow {
   private static win: Window | null = null;
@@ -97,6 +98,11 @@ export class StandaloneWindow {
       ChatView.renderHistoryForPanel(this.panelInstance);
       ChatView.renderContextsForPanel(this.panelInstance);
       ChatView.updateAuthStatusForPanel(this.panelInstance);
+      ChatView.updateQuotaForPanel(
+        this.panelInstance,
+        QuotaManager.getState(),
+      );
+      ChatView.refreshLiveQuota();
 
       if (this.panelInstance.pinButton) {
         this.panelInstance.pinButton.textContent = keepOnTop

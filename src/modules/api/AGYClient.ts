@@ -253,6 +253,41 @@ export class AGYClient {
     }
   }
 
+  /**
+   * Fetch live usage metrics text via agy -p "/usage" --dangerously-skip-permissions
+   */
+  public static async fetchLiveUsage(): Promise<string | null> {
+    const agyPath = await AGYClient.findAgyPath();
+    if (!agyPath) return null;
+
+    try {
+      const Subprocess = getSubprocess();
+      const homeDir = AGYClient.getHomeDir();
+      const procOptions: any = {
+        command: agyPath,
+        arguments: ["-p", "/usage", "--dangerously-skip-permissions"],
+        stdin: "pipe",
+        stdout: "pipe",
+        stderr: "ignore",
+        workdir: homeDir || null,
+      };
+      if (homeDir) {
+        procOptions.environmentAppend = true;
+        procOptions.environment = {
+          HOME: homeDir,
+          ...(Zotero.isWin ? { USERPROFILE: homeDir } : {}),
+        };
+      }
+      const proc = await Subprocess.call(procOptions);
+      await proc.stdin.close();
+      const out = (await proc.stdout.readString())?.trim();
+      await proc.wait();
+      return out || null;
+    } catch (e: any) {
+      return null;
+    }
+  }
+
   static async sendMessageStream(
     prompt: string,
     onChunk: (text: string, done: boolean) => void,
