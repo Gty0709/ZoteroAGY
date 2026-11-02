@@ -25,6 +25,8 @@ export class ChatManager {
     role: "user" | "assistant" | "system",
     content: string,
     contexts?: ContextItem[],
+    tokens?: number,
+    backend?: "agy" | "claude",
   ): ChatMessage {
     let conv = ChatManager.getActiveConversation();
     if (!conv) conv = ChatManager.createConversation();
@@ -34,6 +36,8 @@ export class ChatManager {
       content,
       timestamp: Date.now(),
       contexts,
+      tokens,
+      backend: backend || ChatManager.getActiveEngine(),
     };
     conv.messages.push(msg);
     conv.updatedAt = Date.now();
@@ -42,6 +46,39 @@ export class ChatManager {
     }
     ChatManager.saveConversations();
     return msg;
+  }
+
+  static getActiveEngine(): "agy" | "claude" {
+    try {
+      const saved = Zotero.Prefs.get(
+        `${addon.data.config.prefsPrefix}.activeEngine`,
+        true,
+      ) as string;
+      if (saved === "claude" || saved === "agy") {
+        addon.data.chat.activeEngine = saved;
+        return saved;
+      }
+    } catch (_) {}
+    return addon.data.chat.activeEngine || "agy";
+  }
+
+  static setActiveEngine(engine: "agy" | "claude"): void {
+    addon.data.chat.activeEngine = engine;
+    try {
+      Zotero.Prefs.set(
+        `${addon.data.config.prefsPrefix}.activeEngine`,
+        engine,
+        true,
+      );
+    } catch (_) {}
+  }
+
+  static setClaudeSessionId(convId: string, sessionId: string): void {
+    const conv = addon.data.chat.conversations.get(convId);
+    if (conv) {
+      conv.claudeSessionId = sessionId;
+      ChatManager.saveConversations();
+    }
   }
 
   static updateTitleFromMessages(convId: string): void {

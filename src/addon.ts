@@ -9,6 +9,8 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
   contexts?: ContextItem[];
+  tokens?: number;
+  backend?: "agy" | "claude";
 }
 
 export interface Conversation {
@@ -18,6 +20,7 @@ export interface Conversation {
   createdAt: number;
   updatedAt: number;
   agyConversationId?: string;
+  claudeSessionId?: string;
 }
 
 export interface ContextItem {
@@ -50,6 +53,7 @@ class Addon {
       conversations: Map<string, Conversation>;
       activeConversationId: string | null;
       contexts: ContextItem[];
+      activeEngine: "agy" | "claude";
     };
     auth: {
       accessToken: string | null;
@@ -72,6 +76,7 @@ class Addon {
         conversations: new Map(),
         activeConversationId: null,
         contexts: [],
+        activeEngine: "agy",
       },
       auth: { accessToken: null, refreshToken: null, userInfo: null },
       sidebar: { browser: null, visible: false },

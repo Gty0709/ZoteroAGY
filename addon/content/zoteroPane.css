@@ -978,12 +978,168 @@ collapsible-section[data-pane*="agy-chat"][open] {
 
 .agy-cli-badge {
   font-size: calc(var(--agy-font-size, 14px) * 0.85) !important;
-  color: #188038 !important;
   font-weight: 500 !important;
   display: inline-flex !important;
   align-items: center !important;
-  gap: 3px !important;
+  gap: 4px !important;
   cursor: pointer !important;
+  padding: 2px 7px !important;
+  border-radius: 4px !important;
+  transition: all 0.15s ease !important;
+  user-select: none !important;
+}
+
+.agy-cli-badge-agy {
+  color: #188038 !important;
+  background: rgba(24, 128, 56, 0.08) !important;
+  border: 1px solid rgba(24, 128, 56, 0.25) !important;
+}
+
+.agy-cli-badge-agy:hover {
+  background: rgba(24, 128, 56, 0.16) !important;
+}
+
+.agy-cli-badge-claude {
+  color: #7c3aed !important;
+  background: rgba(124, 58, 237, 0.08) !important;
+  border: 1px solid rgba(124, 58, 237, 0.25) !important;
+}
+
+.agy-cli-badge-claude:hover {
+  background: rgba(124, 58, 237, 0.16) !important;
+}
+
+.agy-selectors-group {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 6px !important;
+}
+
+.agy-quota-group {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  user-select: none !important;
+}
+
+.agy-quota-meter {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  background: rgba(0, 0, 0, 0.04) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  font-size: calc(var(--agy-font-size, 14px) * 0.78) !important;
+  cursor: pointer !important;
+  transition: background 0.15s ease !important;
+}
+
+.agy-quota-meter:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
+}
+
+.agy-quota-pill-label {
+  font-weight: 600 !important;
+  color: var(--material-text-secondary, #555) !important;
+  font-size: 10px !important;
+}
+
+.agy-quota-bar {
+  width: 32px !important;
+  height: 5px !important;
+  border-radius: 3px !important;
+  background: rgba(0, 0, 0, 0.12) !important;
+  overflow: hidden !important;
+  position: relative !important;
+}
+
+.agy-quota-fill {
+  height: 100% !important;
+  border-radius: 3px !important;
+  transition: width 0.3s ease !important;
+}
+
+.agy-quota-fill-week {
+  background: linear-gradient(90deg, #8b5cf6, #7c3aed) !important;
+}
+
+.agy-quota-fill-5h {
+  background: linear-gradient(90deg, #06b6d4, #0284c7) !important;
+}
+
+.agy-quota-pct {
+  font-size: 10.5px !important;
+  font-weight: 600 !important;
+  color: var(--material-text-primary, #444) !important;
+  font-variant-numeric: tabular-nums !important;
+}
+
+.agy-context-meter {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  padding: 2px 7px !important;
+  border-radius: 12px !important;
+  border: 1px solid rgba(0, 0, 0, 0.15) !important;
+  background: rgba(0, 0, 0, 0.03) !important;
+  font-size: calc(var(--agy-font-size, 14px) * 0.78) !important;
+  user-select: none !important;
+  cursor: default !important;
+}
+
+.agy-context-bar {
+  width: 36px !important;
+  height: 5px !important;
+  border-radius: 3px !important;
+  background: rgba(0, 0, 0, 0.12) !important;
+  overflow: hidden !important;
+  position: relative !important;
+}
+
+.agy-context-fill {
+  height: 100% !important;
+  border-radius: 3px !important;
+  background: #7c3aed !important;
+  transition: width 0.25s ease, background 0.25s ease !important;
+}
+
+.agy-context-pct {
+  font-size: 10.5px !important;
+  font-weight: 600 !important;
+  color: var(--material-text-secondary, #555) !important;
+  font-variant-numeric: tabular-nums !important;
+}
+
+.agy-token-badge {
+  font-size: calc(var(--agy-font-size, 14px) * 0.75) !important;
+  color: var(--material-text-secondary, #777) !important;
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-radius: 4px !important;
+  padding: 1px 5px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 2px !important;
+  user-select: none !important;
+  font-variant-numeric: tabular-nums !important;
+}
+
+.agy-token-badge-assistant {
+  background: rgba(0, 0, 0, 0.05) !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+  color: var(--material-text-secondary, #666) !important;
+}
+
+.agy-msg-meta {
+  display: flex !important;
+  align-items: center !important;
+  margin-top: 3px !important;
+}
+
+.agy-msg-meta-user {
+  justify-content: flex-end !important;
+  padding-right: 4px !important;
 }
 
 .agy-cli-notfound {

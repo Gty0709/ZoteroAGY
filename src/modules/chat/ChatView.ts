@@ -1,4 +1,7 @@
 import { AGYClient } from "../api/AGYClient";
+import { ClaudeClient } from "../api/ClaudeClient";
+import { TokenCounter } from "../api/TokenCounter";
+import { QuotaManager, QuotaState } from "../api/QuotaManager";
 import { ChatManager } from "./ChatManager";
 import { ContextManager } from "../context/ContextManager";
 import { NoteWriter } from "../notes/NoteWriter";
@@ -34,6 +37,11 @@ export interface AGYPanelInstance {
   authStatusElement: HTMLElement;
   modelSelectElement: HTMLSelectElement;
   effortSelectElement?: HTMLSelectElement;
+  weekQuotaElement?: HTMLElement;
+  fiveHourQuotaElement?: HTMLElement;
+  contextMeterElement?: HTMLElement;
+  contextFillElement?: HTMLElement;
+  contextValElement?: HTMLElement;
   pinButton?: HTMLElement;
   isStandalone?: boolean;
   historyDrawer?: HTMLElement;
@@ -111,6 +119,8 @@ export class ChatView {
         ChatView.renderHistoryForPanel(instance);
         ChatView.renderContextsForPanel(instance);
         ChatView.updateAuthStatusForPanel(instance);
+        ChatView.updateContextMeterForPanel(instance);
+        ChatView.updateQuotaForPanel(instance, QuotaManager.getState());
       }
     } catch (e: any) {
       ztoolkit?.log?.("ChatView.init error:", e);
@@ -304,95 +314,57 @@ export class ChatView {
       "display: flex; justify-content: space-between; align-items: center;",
     );
 
-    // Selectors group: Model + Effort
+    // Selectors group: Model + Effort + Quota Meters + Context Meter
     const selectorsGroup = el(doc, "div", "agy-selectors-group");
 
     const modelSelect = el(doc, "select", "agy-model-select");
     modelSelect.title = "选择模型 (Model)";
-    const currentModel = AGYClient.getModel();
-    for (const m of AGYClient.AVAILABLE_MODELS) {
-      const opt = el(doc, "option", "", "", m.name);
-      opt.value = m.id;
-      if (m.id === currentModel) opt.selected = true;
-      modelSelect.appendChild(opt);
-    }
 
     const effortSelect = el(doc, "select", "agy-effort-select");
+    effortSelect.title = "选择思考强度 (Reasoning Effort)";
 
-    const populateEffortOptions = (
-      selectEl: HTMLSelectElement,
-      modelId: string,
-      targetEffort?: string,
-    ) => {
-      const modelDef = AGYClient.AVAILABLE_MODELS.find((m) => m.id === modelId);
-      selectEl.innerHTML = "";
-      if (!modelDef || modelDef.efforts.length === 0) {
-        const opt = el(doc, "option", "", "", "内置思考");
-        opt.value = "";
-        selectEl.appendChild(opt);
-        selectEl.disabled = true;
-        selectEl.title = "当前模型不支持自定义思考强度";
-        return;
-      }
-      selectEl.disabled = false;
-      selectEl.title = "选择思考强度 (Reasoning Effort)";
-      const activeEffort =
-        targetEffort || AGYClient.getEffort() || modelDef.defaultEffort;
-      for (const effId of modelDef.efforts) {
-        const effMeta = AGYClient.AVAILABLE_EFFORTS.find((e) => e.id === effId);
-        const opt = el(doc, "option", "", "", effMeta ? effMeta.name : effId);
-        opt.value = effId;
-        if (
-          effId === activeEffort ||
-          (!modelDef.efforts.includes(activeEffort) &&
-            effId === modelDef.defaultEffort)
-        ) {
-          opt.selected = true;
-        }
-        selectEl.appendChild(opt);
-      }
-    };
+    // Dual Quota Meters (周配额 & 5h窗口配额)
+    const quotaGroup = el(doc, "div", "agy-quota-group");
 
-    populateEffortOptions(effortSelect, currentModel, AGYClient.getEffort());
-
-    modelSelect.addEventListener("change", (e: any) => {
-      const newModel = e.target.value;
-      AGYClient.setModel(newModel);
-      const modelDef = AGYClient.AVAILABLE_MODELS.find(
-        (m) => m.id === newModel,
-      );
-      let newEffort = AGYClient.getEffort();
-      if (modelDef && modelDef.efforts.length > 0) {
-        if (!modelDef.efforts.includes(newEffort)) {
-          newEffort = modelDef.defaultEffort;
-          AGYClient.setEffort(newEffort);
-        }
-      }
-      populateEffortOptions(effortSelect, newModel, newEffort);
-
-      // Sync across other panel instances
-      for (const p of ChatView.panels) {
-        if (p.modelSelectElement) p.modelSelectElement.value = newModel;
-        if (p.effortSelectElement) {
-          populateEffortOptions(p.effortSelectElement, newModel, newEffort);
-        }
-      }
+    // Week Quota (周)
+    const weekMeter = el(doc, "div", "agy-quota-meter agy-quota-week");
+    weekMeter.title = "周配额使用率 (点击刷新)";
+    const weekLabel = el(doc, "span", "agy-quota-pill-label", "", "周");
+    const weekBar = el(doc, "div", "agy-quota-bar");
+    const weekFill = el(doc, "div", "agy-quota-fill agy-quota-fill-week");
+    weekBar.appendChild(weekFill);
+    const weekVal = el(doc, "span", "agy-quota-pct", "", "0%");
+    weekMeter.append(weekLabel, weekBar, weekVal);
+    weekMeter.addEventListener("click", () => {
+      ChatView.refreshLiveQuota();
     });
 
-    effortSelect.addEventListener("change", (e: any) => {
-      const newEffort = e.target.value;
-      if (newEffort) {
-        AGYClient.setEffort(newEffort);
-        // Sync across other panel instances
-        for (const p of ChatView.panels) {
-          if (p.effortSelectElement && !p.effortSelectElement.disabled) {
-            p.effortSelectElement.value = newEffort;
-          }
-        }
-      }
+    // 5-Hour Rolling Quota (5h)
+    const fiveHourMeter = el(doc, "div", "agy-quota-meter agy-quota-5h");
+    fiveHourMeter.title = "5小时滑动窗口配额 (点击刷新)";
+    const fiveHourLabel = el(doc, "span", "agy-quota-pill-label", "", "5h");
+    const fiveHourBar = el(doc, "div", "agy-quota-bar");
+    const fiveHourFill = el(doc, "div", "agy-quota-fill agy-quota-fill-5h");
+    fiveHourBar.appendChild(fiveHourFill);
+    const fiveHourVal = el(doc, "span", "agy-quota-pct", "", "0%");
+    fiveHourMeter.append(fiveHourLabel, fiveHourBar, fiveHourVal);
+    fiveHourMeter.addEventListener("click", () => {
+      ChatView.refreshLiveQuota();
     });
 
-    selectorsGroup.append(modelSelect, effortSelect);
+    quotaGroup.append(weekMeter, fiveHourMeter);
+
+    // Context capacity progress bar (当前上下文量)
+    const contextMeter = el(doc, "div", "agy-context-meter");
+    contextMeter.title = "当前上下文窗口占用率";
+    const contextBar = el(doc, "div", "agy-context-bar");
+    const contextFill = el(doc, "div", "agy-context-fill");
+    contextFill.style.width = "0%";
+    contextBar.appendChild(contextFill);
+    const contextVal = el(doc, "span", "agy-context-pct", "", "0%");
+    contextMeter.append(contextBar, contextVal);
+
+    selectorsGroup.append(modelSelect, effortSelect, quotaGroup, contextMeter);
     const sendBtn = el(doc, "button", "agy-send-btn", "", "发送 ▶");
 
     footer.append(selectorsGroup, sendBtn);
@@ -430,6 +402,11 @@ export class ChatView {
       authStatusElement: authStatus,
       modelSelectElement: modelSelect,
       effortSelectElement: effortSelect,
+      weekQuotaElement: weekMeter,
+      fiveHourQuotaElement: fiveHourMeter,
+      contextMeterElement: contextMeter,
+      contextFillElement: contextFill,
+      contextValElement: contextVal,
       pinButton,
       isStandalone,
       historyDrawer: drawer,
@@ -437,6 +414,16 @@ export class ChatView {
       historyList: drawerList,
       fontSizeLabel,
     };
+
+    // Textarea input watcher to recalculate context meter in real time
+    textarea.addEventListener("input", () => {
+      ChatView.updateContextMeterForPanel(instance);
+    });
+
+    // Populate model and effort options based on active engine
+    ChatView.setupModelAndEffortEvents(instance);
+    ChatView.populateModelAndEffortOptions(instance);
+    ChatView.updateQuotaForPanel(instance, QuotaManager.getState());
 
     historyBtn.addEventListener("click", () => {
       const isOpen = drawer.classList.contains("open");
@@ -611,6 +598,247 @@ export class ChatView {
     }
   }
 
+  public static setupModelAndEffortEvents(instance: AGYPanelInstance): void {
+    if (!instance.modelSelectElement || !instance.effortSelectElement) return;
+
+    instance.modelSelectElement.addEventListener("change", (e: any) => {
+      const newModel = e.target.value;
+      const engine = ChatManager.getActiveEngine();
+      if (engine === "claude") {
+        ClaudeClient.setModel(newModel);
+      } else {
+        AGYClient.setModel(newModel);
+      }
+      ChatView.syncModelAndEffortSelectors();
+      ChatView.updateAllContextMeters();
+    });
+
+    instance.effortSelectElement.addEventListener("change", (e: any) => {
+      const newEffort = e.target.value;
+      if (newEffort) {
+        const engine = ChatManager.getActiveEngine();
+        if (engine === "claude") {
+          ClaudeClient.setEffort(newEffort);
+        } else {
+          AGYClient.setEffort(newEffort);
+        }
+        for (const p of ChatView.panels) {
+          if (p.effortSelectElement && !p.effortSelectElement.disabled) {
+            p.effortSelectElement.value = newEffort;
+          }
+        }
+      }
+    });
+  }
+
+  public static populateModelAndEffortOptions(instance: AGYPanelInstance): void {
+    if (!instance.modelSelectElement || !instance.effortSelectElement) return;
+    const doc = instance.doc;
+    const engine = ChatManager.getActiveEngine();
+
+    const modelSelect = instance.modelSelectElement;
+    const effortSelect = instance.effortSelectElement;
+
+    modelSelect.innerHTML = "";
+    effortSelect.innerHTML = "";
+
+    if (engine === "claude") {
+      const currentModel = ClaudeClient.getModel();
+      for (const m of ClaudeClient.AVAILABLE_MODELS) {
+        const opt = el(doc, "option", "", "", m.name);
+        opt.value = m.id;
+        if (m.id === currentModel) opt.selected = true;
+        modelSelect.appendChild(opt);
+      }
+
+      const modelDef =
+        ClaudeClient.AVAILABLE_MODELS.find((m) => m.id === currentModel) ||
+        ClaudeClient.AVAILABLE_MODELS[0];
+      const activeEffort =
+        ClaudeClient.getEffort() || modelDef?.defaultEffort || "high";
+
+      for (const effMeta of ClaudeClient.AVAILABLE_EFFORTS) {
+        const opt = el(doc, "option", "", "", effMeta.name);
+        opt.value = effMeta.id;
+        if (effMeta.id === activeEffort) opt.selected = true;
+        effortSelect.appendChild(opt);
+      }
+      effortSelect.disabled = false;
+      effortSelect.title = "选择思考强度 (Reasoning Effort)";
+    } else {
+      const currentModel = AGYClient.getModel();
+      for (const m of AGYClient.AVAILABLE_MODELS) {
+        const opt = el(doc, "option", "", "", m.name);
+        opt.value = m.id;
+        if (m.id === currentModel) opt.selected = true;
+        modelSelect.appendChild(opt);
+      }
+
+      const modelDef = AGYClient.AVAILABLE_MODELS.find(
+        (m) => m.id === currentModel,
+      );
+      if (!modelDef || modelDef.efforts.length === 0) {
+        const opt = el(doc, "option", "", "", "内置思考");
+        opt.value = "";
+        effortSelect.appendChild(opt);
+        effortSelect.disabled = true;
+        effortSelect.title = "当前模型不支持自定义思考强度";
+      } else {
+        effortSelect.disabled = false;
+        effortSelect.title = "选择思考强度 (Reasoning Effort)";
+        const activeEffort = AGYClient.getEffort() || modelDef.defaultEffort;
+        for (const effId of modelDef.efforts) {
+          const effMeta = AGYClient.AVAILABLE_EFFORTS.find((e) => e.id === effId);
+          const opt = el(doc, "option", "", "", effMeta ? effMeta.name : effId);
+          opt.value = effId;
+          if (
+            effId === activeEffort ||
+            (!modelDef.efforts.includes(activeEffort) &&
+              effId === modelDef.defaultEffort)
+          ) {
+            opt.selected = true;
+          }
+          effortSelect.appendChild(opt);
+        }
+      }
+    }
+  }
+
+  public static syncModelAndEffortSelectors(): void {
+    ChatView.cleanupPanels();
+    for (const p of ChatView.panels) {
+      if (p.panel?.isConnected) {
+        ChatView.populateModelAndEffortOptions(p);
+      }
+    }
+  }
+
+  public static async switchEngine(newEngine: "agy" | "claude"): Promise<void> {
+    ChatManager.setActiveEngine(newEngine);
+    await ChatView.updateAuthStatus();
+    ChatView.syncModelAndEffortSelectors();
+    ChatView.updateAllContextMeters();
+    ChatView.updateAllQuotaMeters();
+
+    try {
+      new ztoolkit.ProgressWindow(addon.data.config.addonName)
+        .createLine({
+          text:
+            newEngine === "claude"
+              ? "✨ 已无损切换至 Claude Code (上下文与对话历史完整保留)"
+              : "✨ 已无损切换至 AGY CLI (上下文与对话历史完整保留)",
+          type: "info",
+          progress: 100,
+        })
+        .show(1600);
+    } catch (_) {}
+  }
+
+  public static async refreshLiveQuota(): Promise<void> {
+    try {
+      for (const p of ChatView.panels) {
+        if (p.weekQuotaElement) {
+          const pct = p.weekQuotaElement.querySelector(".agy-quota-pct");
+          if (pct) pct.textContent = "...";
+        }
+        if (p.fiveHourQuotaElement) {
+          const pct = p.fiveHourQuotaElement.querySelector(".agy-quota-pct");
+          if (pct) pct.textContent = "...";
+        }
+      }
+      const updated = await QuotaManager.refreshQuota();
+      ChatView.updateAllQuotaMeters(updated);
+    } catch (e: any) {
+      debugLog("refreshLiveQuota error: " + e.message);
+    }
+  }
+
+  public static updateQuotaForPanel(
+    instance: AGYPanelInstance,
+    state: QuotaState,
+  ): void {
+    if (instance.weekQuotaElement) {
+      const fill = instance.weekQuotaElement.querySelector(
+        ".agy-quota-fill",
+      ) as HTMLElement;
+      const text = instance.weekQuotaElement.querySelector(
+        ".agy-quota-pct",
+      ) as HTMLElement;
+      if (fill) fill.style.width = `${Math.min(100, Math.max(0, state.weekPercent))}%`;
+      if (text) text.textContent = `${state.weekPercent}%`;
+      instance.weekQuotaElement.title = `周配额使用率: ${state.weekPercent}%\n${state.weekResetsAt ? `重置时间: ${state.weekResetsAt}` : ""}\n点击即时查询刷新配额`;
+    }
+
+    if (instance.fiveHourQuotaElement) {
+      const fill = instance.fiveHourQuotaElement.querySelector(
+        ".agy-quota-fill",
+      ) as HTMLElement;
+      const text = instance.fiveHourQuotaElement.querySelector(
+        ".agy-quota-pct",
+      ) as HTMLElement;
+      if (fill) fill.style.width = `${Math.min(100, Math.max(0, state.fiveHourPercent))}%`;
+      if (text) text.textContent = `${state.fiveHourPercent}%`;
+      instance.fiveHourQuotaElement.title = `5小时滑动窗口配额: ${state.fiveHourPercent}%\n${state.fiveHourResetsAt ? `重置时间: ${state.fiveHourResetsAt}` : ""}\n点击即时查询刷新配额`;
+    }
+  }
+
+  public static updateAllQuotaMeters(state?: QuotaState): void {
+    const s = state || QuotaManager.getState();
+    ChatView.cleanupPanels();
+    for (const p of ChatView.panels) {
+      if (p.panel?.isConnected) {
+        ChatView.updateQuotaForPanel(p, s);
+      }
+    }
+  }
+
+  public static updateContextMeterForPanel(instance: AGYPanelInstance): void {
+    if (!instance.contextMeterElement) return;
+    const conversation = ChatManager.getActiveConversation();
+    const messages = conversation ? conversation.messages : [];
+    const contexts = ContextManager.getContexts();
+    const inputDraft = instance.inputElement?.value || "";
+    const engine = ChatManager.getActiveEngine();
+    const modelId =
+      engine === "claude" ? ClaudeClient.getModel() : AGYClient.getModel();
+    const systemPrompt = PromptTemplates.getSystemPrompt();
+
+    const usage = TokenCounter.calculateUsage(
+      systemPrompt,
+      contexts,
+      messages,
+      inputDraft,
+      modelId,
+    );
+
+    const fill = instance.contextFillElement;
+    const val = instance.contextValElement;
+
+    if (fill) {
+      fill.style.width = `${Math.min(100, usage.percentage)}%`;
+      if (usage.percentage > 85) {
+        fill.style.background = "#ea4335";
+      } else if (usage.percentage > 60) {
+        fill.style.background = "#fbbc04";
+      } else {
+        fill.style.background = engine === "claude" ? "#7c3aed" : "#1a73e8";
+      }
+    }
+    if (val) {
+      val.textContent = `${usage.percentage}%`;
+    }
+    instance.contextMeterElement.title = `当前上下文占用: ${TokenCounter.formatTokens(usage.total)} / ${TokenCounter.formatTokens(usage.capacity)} (${usage.percentage}%)\n包含系统设定 + 批注文献卡片 + 对话历史 + 当前输入`;
+  }
+
+  public static updateAllContextMeters(): void {
+    ChatView.cleanupPanels();
+    for (const p of ChatView.panels) {
+      if (p.panel?.isConnected) {
+        ChatView.updateContextMeterForPanel(p);
+      }
+    }
+  }
+
   public static async updateAuthStatus(): Promise<void> {
     ChatView.cleanupPanels();
     for (const p of ChatView.panels) {
@@ -627,26 +855,57 @@ export class ChatView {
     const doc = instance.doc;
     instance.authStatusElement.textContent = "⏳ 检测 CLI...";
 
-    const status = await AGYClient.checkCLIStatus();
+    const currentEngine = ChatManager.getActiveEngine();
     instance.authStatusElement.textContent = "";
 
-    if (status.available) {
-      const readySpan = el(doc, "span", "agy-cli-badge");
-      readySpan.title = `Antigravity CLI 已就绪\n路径: ${status.path}\n点击测试连接`;
-      readySpan.textContent = "🟢 AGY CLI";
-      readySpan.addEventListener("click", () => OAuthManager.login());
-      instance.authStatusElement.appendChild(readySpan);
+    if (currentEngine === "claude") {
+      const status = await ClaudeClient.checkCLIStatus();
+      if (status.available) {
+        const readySpan = el(doc, "span", "agy-cli-badge agy-cli-badge-claude");
+        readySpan.title = `Claude Code CLI 已就绪\n路径: ${status.path}\n【点击可无损切换至 AGY CLI，保留全部对话上下文】`;
+        readySpan.textContent = "🟣 Claude Code";
+        readySpan.addEventListener("click", () => {
+          ChatView.switchEngine("agy");
+        });
+        instance.authStatusElement.appendChild(readySpan);
+      } else {
+        const notFoundBtn = el(
+          doc,
+          "button",
+          "agy-action-btn agy-cli-notfound",
+          "",
+          "🔴 未检测到 claude",
+        );
+        notFoundBtn.title = "未检测到 claude.exe，点击切换回 AGY CLI 或配置路径";
+        notFoundBtn.addEventListener("click", () => {
+          ChatView.switchEngine("agy");
+        });
+        instance.authStatusElement.appendChild(notFoundBtn);
+      }
     } else {
-      const notFoundBtn = el(
-        doc,
-        "button",
-        "agy-action-btn agy-cli-notfound",
-        "",
-        "🔴 未检测到 agy",
-      );
-      notFoundBtn.title = "点击打开首选项配置 agy.exe 路径";
-      notFoundBtn.addEventListener("click", () => ChatView.openPreferences());
-      instance.authStatusElement.appendChild(notFoundBtn);
+      const status = await AGYClient.checkCLIStatus();
+      if (status.available) {
+        const readySpan = el(doc, "span", "agy-cli-badge agy-cli-badge-agy");
+        readySpan.title = `Antigravity CLI 已就绪\n路径: ${status.path}\n【点击可无损切换至 Claude Code，保留全部对话上下文】`;
+        readySpan.textContent = "🟢 AGY CLI";
+        readySpan.addEventListener("click", () => {
+          ChatView.switchEngine("claude");
+        });
+        instance.authStatusElement.appendChild(readySpan);
+      } else {
+        const notFoundBtn = el(
+          doc,
+          "button",
+          "agy-action-btn agy-cli-notfound",
+          "",
+          "🔴 未检测到 agy",
+        );
+        notFoundBtn.title = "未检测到 agy.exe，点击切换为 Claude Code 或配置路径";
+        notFoundBtn.addEventListener("click", () => {
+          ChatView.switchEngine("claude");
+        });
+        instance.authStatusElement.appendChild(notFoundBtn);
+      }
     }
   }
 
@@ -720,7 +979,7 @@ export class ChatView {
     if (!conversation || conversation.messages.length === 0) {
       const emptyTip = el(doc, "div", "agy-empty-tip");
       emptyTip.innerHTML =
-        "👋 你好！我是 AGY 智能助手。<br/>已连接本地 <strong>Antigravity CLI</strong>。<br/>在左边栏批注卡片上点击 <strong>✦</strong>，或在 PDF 中划词点击<strong>添加到 AGY</strong>，即可快速将内容带入问答。";
+        "👋 你好！我是 AGY 智能学术助手。<br/>已连接本地 <strong>Antigravity CLI</strong> 与 <strong>Claude Code</strong>。<br/>在顶部点击 <strong>🟢 AGY CLI</strong> / <strong>🟣 Claude Code</strong> 可无损热切换引擎。<br/>在文献批注卡片上点击 <strong>✦</strong>，或在 PDF 中划词点击<strong>添加到 AGY</strong>，即可快速带入上下文。";
       instance.messagesContainer.appendChild(emptyTip);
       return;
     }
@@ -732,9 +991,34 @@ export class ChatView {
         msg.content,
         msg.id,
         msg.contexts,
+        msg.tokens,
       );
     }
     ChatView.scrollToBottom(instance);
+    ChatView.updateContextMeterForPanel(instance);
+  }
+
+  private static renderStreamingChunks(
+    bubbleElements: HTMLElement[],
+    fullResponse: string,
+  ): void {
+    for (let i = 0; i < bubbleElements.length; i++) {
+      const b = bubbleElements[i];
+      if (b && b.isConnected && b.ownerDocument) {
+        try {
+          NoteFormatter.renderToDOM(b.ownerDocument, fullResponse, b, true);
+        } catch (_) {
+          b.textContent = fullResponse;
+        }
+      }
+    }
+    for (const p of ChatView.panels) {
+      if (p.panel?.isConnected) {
+        try {
+          ChatView.scrollToBottom(p);
+        } catch (_) {}
+      }
+    }
   }
 
   private static async handleSend(
@@ -744,9 +1028,22 @@ export class ChatView {
     const text = triggerInstance.inputElement?.value.trim();
     if (!text) return;
 
-    // Check CLI availability
-    const status = await AGYClient.checkCLIStatus();
-    if (!status.available) {
+    const currentEngine = ChatManager.getActiveEngine();
+
+    // Check CLI availability for active engine
+    let isAvailable = false;
+    let cliErrMsg = "";
+    if (currentEngine === "claude") {
+      const status = await ClaudeClient.checkCLIStatus();
+      isAvailable = status.available;
+      cliErrMsg = status.error || "未检测到 Claude Code CLI (claude.exe)";
+    } else {
+      const status = await AGYClient.checkCLIStatus();
+      isAvailable = status.available;
+      cliErrMsg = status.error || "未检测到 Antigravity CLI (agy.exe)";
+    }
+
+    if (!isAvailable) {
       const bubbleEl = ChatView.appendMessageDOM(
         triggerInstance,
         "assistant",
@@ -755,11 +1052,17 @@ export class ChatView {
       );
       bubbleEl.innerHTML = `
         <div style="padding: 4px; line-height: 1.6; color: #d93025;">
-          <p style="font-weight: 600; font-size: 13px; margin: 0 0 4px 0;">⚠️ 未检测到 Antigravity CLI (agy.exe)</p>
-          <p style="font-size: 12px; color: #555; margin: 0 0 8px 0;">对话由本地 Antigravity CLI 驱动。请确保已安装 agy，或在首选项中手动指定 agy.exe 所在路径。</p>
-          <button id="agy-open-cfg-btn" style="background: #2b7fff; color: white; border: none; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 12px;">⚙️ 打开首选项配置</button>
+          <p style="font-weight: 600; font-size: 13px; margin: 0 0 4px 0;">⚠️ ${cliErrMsg}</p>
+          <p style="font-size: 12px; color: #555; margin: 0 0 8px 0;">当前选择的引擎为 <strong>${currentEngine === "claude" ? "Claude Code" : "AGY CLI"}</strong>。您可点击顶部徽标切换至另一可用引擎，或在首选项中配置 CLI 路径。</p>
+          <button id="agy-switch-engine-btn" style="background: #7c3aed; color: white; border: none; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 12px; margin-right: 6px;">🔄 切换为 ${currentEngine === "claude" ? "AGY CLI" : "Claude Code"}</button>
+          <button id="agy-open-cfg-btn" style="background: #2b7fff; color: white; border: none; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 12px;">⚙️ 打开首选项</button>
         </div>
       `;
+      bubbleEl
+        .querySelector("#agy-switch-engine-btn")
+        ?.addEventListener("click", () => {
+          ChatView.switchEngine(currentEngine === "claude" ? "agy" : "claude");
+        });
       bubbleEl
         .querySelector("#agy-open-cfg-btn")
         ?.addEventListener("click", () => ChatView.openPreferences());
@@ -771,15 +1074,32 @@ export class ChatView {
 
     ChatView.cleanupPanels();
 
+    // Calculate user message tokens
+    const userTokens = TokenCounter.estimateTokens(text);
+
     // Add user message to history
-    const userMsg = ChatManager.addMessage("user", text, contexts);
+    const userMsg = ChatManager.addMessage(
+      "user",
+      text,
+      contexts,
+      userTokens,
+      currentEngine,
+    );
 
     // Sync user message to all active panels
     for (const p of ChatView.panels) {
       if (p.panel?.isConnected && p.messagesContainer) {
         const emptyTip = p.messagesContainer.querySelector(".agy-empty-tip");
         if (emptyTip) emptyTip.remove();
-        ChatView.appendMessageDOM(p, "user", text, userMsg.id, contexts);
+        ChatView.appendMessageDOM(
+          p,
+          "user",
+          text,
+          userMsg.id,
+          contexts,
+          userTokens,
+        );
+        ChatView.updateContextMeterForPanel(p);
       }
     }
 
@@ -790,21 +1110,35 @@ export class ChatView {
     const activeDocText = await ContextManager.getActiveItemContext();
 
     const contextSections: string[] = [];
-    if (activeDocText) {
-      contextSections.push(activeDocText);
-    }
-    if (contextText) {
-      contextSections.push(contextText);
-    }
-
-    let fullPrompt = "";
-    if (contextSections.length > 0) {
-      fullPrompt = `${systemCapabilities}\n\n${contextSections.join("\n\n")}\n\n[User Question]\n${text}`;
-    } else {
-      fullPrompt = `${systemCapabilities}\n\n[User Question]\n${text}`;
-    }
+    if (activeDocText) contextSections.push(activeDocText);
+    if (contextText) contextSections.push(contextText);
 
     const conversation = ChatManager.getActiveConversation();
+
+    // Lossless Context Synthesis:
+    // When switching CLI engines, include past conversation turns so the new engine has 100% full context!
+    const pastTurns: string[] = [];
+    if (conversation && conversation.messages.length > 1) {
+      const prior = conversation.messages.slice(0, -1);
+      const recent = prior.slice(-8);
+      for (const m of recent) {
+        if (m.role === "user") {
+          pastTurns.push(`[用户提问]\n${m.content}`);
+        } else if (m.role === "assistant") {
+          pastTurns.push(`[助手回答]\n${m.content}`);
+        }
+      }
+    }
+
+    const promptParts = [systemCapabilities];
+    if (contextSections.length > 0) {
+      promptParts.push(contextSections.join("\n\n"));
+    }
+    if (pastTurns.length > 0) {
+      promptParts.push(`【先前对话历史 (上下文完整衔接)】\n${pastTurns.join("\n\n")}`);
+    }
+    promptParts.push(`[User Question]\n${text}`);
+    const fullPrompt = promptParts.join("\n\n");
 
     // Stream assistant response
     ChatView.isStreaming = true;
@@ -823,49 +1157,62 @@ export class ChatView {
     }
 
     let fullResponse = "";
+    let assistantTokens = 0;
 
     try {
-      const result = await AGYClient.sendMessageStream(
-        fullPrompt,
-        (chunk, done) => {
-          if (chunk) {
-            fullResponse += chunk;
-            for (let i = 0; i < bubbleElements.length; i++) {
-              const b = bubbleElements[i];
-              if (b && b.isConnected && b.ownerDocument) {
-                try {
-                  NoteFormatter.renderToDOM(
-                    b.ownerDocument,
-                    fullResponse,
-                    b,
-                    true,
-                  );
-                } catch (renderErr) {
-                  b.textContent = fullResponse;
-                }
-              }
+      if (currentEngine === "claude") {
+        const result = await ClaudeClient.sendMessageStream(
+          fullPrompt,
+          (chunk, done) => {
+            if (chunk) {
+              fullResponse += chunk;
+              ChatView.renderStreamingChunks(bubbleElements, fullResponse);
             }
-            for (const p of ChatView.panels) {
-              if (p.panel?.isConnected) {
-                try {
-                  ChatView.scrollToBottom(p);
-                } catch (_) {}
-              }
-            }
-          }
-        },
-        conversation?.agyConversationId,
-      );
-
-      fullResponse = result.response;
-      if (result.agyConversationId && conversation) {
-        ChatManager.setAgyConversationId(
-          conversation.id,
-          result.agyConversationId,
+          },
+          conversation?.claudeSessionId,
         );
+
+        fullResponse = result.response;
+        if (result.claudeSessionId && conversation) {
+          ChatManager.setClaudeSessionId(
+            conversation.id,
+            result.claudeSessionId,
+          );
+        }
+        if (result.usage?.outputTokens) {
+          assistantTokens = result.usage.outputTokens;
+        } else {
+          assistantTokens = TokenCounter.estimateTokens(fullResponse);
+        }
+      } else {
+        const result = await AGYClient.sendMessageStream(
+          fullPrompt,
+          (chunk, done) => {
+            if (chunk) {
+              fullResponse += chunk;
+              ChatView.renderStreamingChunks(bubbleElements, fullResponse);
+            }
+          },
+          conversation?.agyConversationId,
+        );
+
+        fullResponse = result.response;
+        if (result.agyConversationId && conversation) {
+          ChatManager.setAgyConversationId(
+            conversation.id,
+            result.agyConversationId,
+          );
+        }
+        assistantTokens = TokenCounter.estimateTokens(fullResponse);
       }
 
-      ChatManager.addMessage("assistant", fullResponse);
+      ChatManager.addMessage(
+        "assistant",
+        fullResponse,
+        undefined,
+        assistantTokens,
+        currentEngine,
+      );
       if (conversation) {
         ChatManager.updateTitleFromMessages(conversation.id);
       }
@@ -882,6 +1229,7 @@ export class ChatView {
                 fullResponse,
                 text,
                 contexts,
+                assistantTokens,
               );
             }
           } catch (renderErr) {
@@ -889,6 +1237,8 @@ export class ChatView {
           }
         }
       }
+      ChatView.updateAllContextMeters();
+      ChatView.updateAllQuotaMeters();
     } catch (e: any) {
       debugLog("ChatView.handleSend ERROR: " + (e?.stack || e?.message || e));
       for (const b of bubbleElements) {
@@ -929,6 +1279,7 @@ export class ChatView {
     content: string,
     msgId: string,
     contexts?: any[],
+    tokens?: number,
   ): HTMLElement {
     const doc = instance.doc;
     if (!instance.messagesContainer)
@@ -955,8 +1306,33 @@ export class ChatView {
 
     msgWrapper.appendChild(bubble);
 
-    if (role === "assistant" && content !== "...") {
-      ChatView.attachActionButtons(doc, msgWrapper, content, "", contexts);
+    // Calculate token display
+    const tokenCount =
+      typeof tokens === "number" && tokens > 0
+        ? tokens
+        : TokenCounter.estimateTokens(content);
+
+    if (role === "user") {
+      const metaRow = el(doc, "div", "agy-msg-meta agy-msg-meta-user");
+      const tokenBadge = el(
+        doc,
+        "span",
+        "agy-token-badge",
+        "",
+        `🪙 ${TokenCounter.formatTokens(tokenCount)} tokens`,
+      );
+      tokenBadge.title = `本条提问消耗约 ${tokenCount} tokens`;
+      metaRow.appendChild(tokenBadge);
+      msgWrapper.appendChild(metaRow);
+    } else if (role === "assistant" && content !== "...") {
+      ChatView.attachActionButtons(
+        doc,
+        msgWrapper,
+        content,
+        "",
+        contexts,
+        tokenCount,
+      );
     }
 
     instance.messagesContainer.appendChild(msgWrapper);
@@ -970,6 +1346,7 @@ export class ChatView {
     answer: string,
     question: string = "",
     contexts?: any[],
+    tokenCount?: number,
   ): void {
     const existing = msgWrapper.querySelector(".agy-actions-bar");
     if (existing) existing.remove();
@@ -978,8 +1355,21 @@ export class ChatView {
       doc,
       "div",
       "agy-actions-bar",
-      "display: flex; gap: 6px; margin-top: 4px; padding-left: 2px;",
+      "display: flex; align-items: center; gap: 6px; margin-top: 4px; padding-left: 2px;",
     );
+
+    // Token count badge on assistant response
+    if (typeof tokenCount === "number" && tokenCount > 0) {
+      const tokenBadge = el(
+        doc,
+        "span",
+        "agy-token-badge agy-token-badge-assistant",
+        "",
+        `🪙 ${TokenCounter.formatTokens(tokenCount)} tokens`,
+      );
+      tokenBadge.title = `本条回答消耗约 ${tokenCount} tokens`;
+      bar.appendChild(tokenBadge);
+    }
 
     // Copy
     const copyBtn = el(doc, "button", "agy-action-btn", "", "📋 复制");

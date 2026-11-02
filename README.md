@@ -108,36 +108,57 @@ Many existing Zotero AI plugins rely on fragile browser reverse-engineering or c
 - **Agent Capabilities**: Built-in instructions for web research (`search_web`, `read_url_content`) and local Zotero MCP (`zotero-mcp`) tools.
 - **Model Switcher**: Switch active models on the fly via the footer dropdown.
 
+### 7. Dual-Engine Lossless Hot-Switching (AGY CLI ⮂ Claude Code)
+
+- **Zero Context Loss**: Click the top badge to switch on the fly between `🟢 AGY CLI` and `🟣 Claude Code`.
+- **Lossless Context Retention**: All message histories and active annotation context cards are strictly preserved during engine transitions. Turns asked under AGY CLI seamlessly feed into Claude Code and vice versa.
+- **Adaptive Model Selection**: Dynamically toggles available models (e.g. Gemini 3.8 Flash / Pro for AGY; Claude 3.7 Sonnet / Opus / Haiku for Claude Code) and reasoning efforts.
+
+### 8. Real-time Quota Meters (Week & 5h), Context Bar, and Token Tracking
+
+- **Weekly Quota Meter (`周`)**: Displays 7-day rolling quota utilization percentage with gradient progress visualization.
+- **5-Hour Quota Meter (`5h`)**: Displays 5-hour sliding rate window utilization with hover tooltips for reset timestamps. Click anytime to trigger a live refresh.
+- **Context Window Capacity Bar**: Battery-capsule gauge calculating current conversation, attachments, and draft size relative to model context capacity (200k / 1M).
+- **Per-Message Token Metrics**: Every user query and AI response displays an exact/estimated token badge (`🪙 120 tokens` / `🪙 1.4k tokens`).
+
 ---
 
 ## 🏗️ Architecture
 
 ```mermaid
 flowchart TD
-    subgraph Zotero7["Zotero 7 Desktop Environment"]
+    subgraph Zotero7["Zotero 7 & 10 Desktop Environment"]
         PDF["PDF Reader (Selection Toolbar)"]
         AnnCard["Annotation Cards ('✦' Button)"]
         Notes["Zotero Note System"]
-        SidePane["Right Item Pane"]
+        SidePane["Right Item Pane / Pinned Window"]
     end
 
     subgraph ZoteroAGY["Zotero AGY Plugin Core"]
-        ChatView["ChatView (Sidebar & Pinned Standalone)"]
+        ChatView["ChatView (Lossless Dual Engine UI)"]
         ContextMgr["ContextManager (Context Aggregator)"]
         NoteFmt["NoteFormatter (Obsidian MD / KaTeX / Mermaid)"]
         HistoryMgr["ChatManager (Multi-Session Storage)"]
+        TokenMeter["TokenCounter & QuotaManager"]
     end
 
-    subgraph LocalBackend["Local Execution Environment"]
-        AGY["Antigravity CLI (agy.exe)"]
-        MCP["Zotero MCP Server"]
+    subgraph DualEngines["Dual Local AI Engines"]
+        AGY["🟢 Antigravity CLI (agy.exe)"]
+        Claude["🟣 Claude Code CLI (claude.exe)"]
+        MCP["Zotero MCP Tools"]
     end
 
     PDF -->|"Add to AGY"| ContextMgr
     AnnCard -->|"Click ✦"| ContextMgr
     ContextMgr -->|"Build Research Prompt"| ChatView
-    ChatView <-->|"Streaming Stdio / API"| AGY
+    TokenMeter <-->|"Realtime Quota & Tokens"| ChatView
+    ChatView <-->|"Lossless Hot-Switch (AGY)"| AGY
+    ChatView <-->|"Lossless Hot-Switch (Claude)"| Claude
     AGY <-->|"Tool Execution"| MCP
+    ChatView -->|"📝 Save to Note"| Notes
+    ChatView -->|"💬 Fill Annotation Card"| AnnCard
+    ChatView -->|"Render Formatting"| NoteFmt
+```
     MCP <-->|"Query Items / Read Metadata"| Notes
     ChatView -->|"📝 Save to Note"| Notes
     ChatView -->|"💬 Fill Annotation Card"| AnnCard
