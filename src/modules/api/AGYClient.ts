@@ -45,40 +45,22 @@ export class AGYClient {
       defaultEffort: "high",
     },
     {
-      id: "gemini-3.7-flash",
-      name: "Gemini 3.7 Flash",
-      efforts: ["high", "medium", "low"],
-      defaultEffort: "high",
-    },
-    {
-      id: "gemini-3.6-flash",
-      name: "Gemini 3.6 Flash",
-      efforts: ["high", "medium", "low"],
-      defaultEffort: "high",
-    },
-    {
-      id: "gemini-3.1-pro",
-      name: "Gemini 3.1 Pro",
-      efforts: ["high", "low"],
-      defaultEffort: "high",
-    },
-    {
       id: "claude-sonnet-4-6",
-      name: "Claude Sonnet 4.6",
+      name: "Claude Sonnet 4.6 (Thinking)",
       efforts: [],
       defaultEffort: "",
     },
     {
       id: "claude-opus-4-6-thinking",
-      name: "Claude Opus 4.6",
+      name: "Claude Opus 4.6 (Thinking)",
       efforts: [],
       defaultEffort: "",
     },
     {
-      id: "gpt-oss-120b",
-      name: "GPT-OSS 120B",
-      efforts: ["medium"],
-      defaultEffort: "medium",
+      id: "gpt-oss-120b-medium",
+      name: "GPT-OSS 120B (Medium)",
+      efforts: [],
+      defaultEffort: "",
     },
   ];
 
@@ -455,14 +437,19 @@ export class AGYClient {
     )?.trim();
     if (!raw) return "gemini-3.8-flash";
 
-    // Backward compatibility with legacy composite strings
+    // Delisted models automatically fallback to active gemini-3.8-flash
+    if (
+      raw.startsWith("gemini-3.7-flash") ||
+      raw.startsWith("gemini-3.6-flash") ||
+      raw.startsWith("gemini-3.1-pro")
+    ) {
+      return "gemini-3.8-flash";
+    }
+
     if (raw.startsWith("gemini-3.8-flash")) return "gemini-3.8-flash";
-    if (raw.startsWith("gemini-3.7-flash")) return "gemini-3.7-flash";
-    if (raw.startsWith("gemini-3.6-flash")) return "gemini-3.6-flash";
-    if (raw.startsWith("gemini-3.1-pro")) return "gemini-3.1-pro";
     if (raw === "claude-sonnet-4-6") return "claude-sonnet-4-6";
     if (raw.startsWith("claude-opus-4-6")) return "claude-opus-4-6-thinking";
-    if (raw.startsWith("gpt-oss-120b")) return "gpt-oss-120b";
+    if (raw.startsWith("gpt-oss-120b")) return "gpt-oss-120b-medium";
 
     const found = AGYClient.AVAILABLE_MODELS.find((m) => m.id === raw);
     return found ? found.id : "gemini-3.8-flash";

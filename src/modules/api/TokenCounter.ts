@@ -54,7 +54,13 @@ export class TokenCounter {
     if (lower.includes("gemini")) {
       return 1000000; // Gemini Flash / Pro context window
     }
-    if (lower.includes("opus-5") || lower.includes("sonnet-5")) {
+    if (
+      lower.includes("opus-5") ||
+      lower.includes("sonnet-5") ||
+      lower.includes("haiku-4") ||
+      lower.includes("fable") ||
+      lower.includes("mythos")
+    ) {
       return 1000000; // 1M token context for next-gen models
     }
     return 200000; // Default 200k for Claude 3.5/3.7 models

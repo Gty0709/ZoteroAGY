@@ -654,17 +654,33 @@ export class ChatView {
       const modelDef =
         ClaudeClient.AVAILABLE_MODELS.find((m) => m.id === currentModel) ||
         ClaudeClient.AVAILABLE_MODELS[0];
-      const activeEffort =
-        ClaudeClient.getEffort() || modelDef?.defaultEffort || "high";
 
-      for (const effMeta of ClaudeClient.AVAILABLE_EFFORTS) {
-        const opt = el(doc, "option", "", "", effMeta.name);
-        opt.value = effMeta.id;
-        if (effMeta.id === activeEffort) opt.selected = true;
+      if (!modelDef || modelDef.efforts.length === 0) {
+        const opt = el(doc, "option", "", "", "内置思考");
+        opt.value = "";
         effortSelect.appendChild(opt);
+        effortSelect.disabled = true;
+        effortSelect.title = "当前模型不支持自定义思考强度";
+      } else {
+        effortSelect.disabled = false;
+        effortSelect.title = "选择思考强度 (Reasoning Effort)";
+        const activeEffort =
+          ClaudeClient.getEffort() || modelDef?.defaultEffort || "high";
+
+        for (const effId of modelDef.efforts) {
+          const effMeta = ClaudeClient.AVAILABLE_EFFORTS.find((e) => e.id === effId);
+          const opt = el(doc, "option", "", "", effMeta ? effMeta.name : effId);
+          opt.value = effId;
+          if (
+            effId === activeEffort ||
+            (!modelDef.efforts.includes(activeEffort) &&
+              effId === modelDef.defaultEffort)
+          ) {
+            opt.selected = true;
+          }
+          effortSelect.appendChild(opt);
+        }
       }
-      effortSelect.disabled = false;
-      effortSelect.title = "选择思考强度 (Reasoning Effort)";
     } else {
       const currentModel = AGYClient.getModel();
       for (const m of AGYClient.AVAILABLE_MODELS) {

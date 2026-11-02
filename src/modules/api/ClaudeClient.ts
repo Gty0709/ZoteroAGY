@@ -28,26 +28,62 @@ function getSubprocess(): any {
 export class ClaudeClient {
   public static readonly AVAILABLE_MODELS: ModelOption[] = [
     {
-      id: "sonnet",
-      name: "Claude Sonnet 3.7",
+      id: "claude-sonnet-5-5",
+      name: "Claude Sonnet 5.5",
       efforts: ["high", "medium", "low"],
       defaultEffort: "high",
     },
     {
-      id: "opus",
+      id: "claude-opus-5-5",
+      name: "Claude Opus 5.5",
+      efforts: ["high", "medium", "low"],
+      defaultEffort: "high",
+    },
+    {
+      id: "claude-haiku-4-5",
+      name: "Claude Haiku 4.5",
+      efforts: ["low"],
+      defaultEffort: "low",
+    },
+    {
+      id: "claude-3-7-sonnet",
+      name: "Claude 3.7 Sonnet",
+      efforts: ["high", "medium", "low"],
+      defaultEffort: "high",
+    },
+    {
+      id: "claude-opus-4-6",
       name: "Claude Opus 4.6",
       efforts: ["high", "medium", "low"],
       defaultEffort: "high",
     },
     {
-      id: "haiku",
-      name: "Claude Haiku 3.5",
+      id: "claude-sonnet-4-6",
+      name: "Claude Sonnet 4.6",
+      efforts: ["high", "medium", "low"],
+      defaultEffort: "high",
+    },
+    {
+      id: "claude-3-5-sonnet",
+      name: "Claude 3.5 Sonnet",
       efforts: ["low"],
       defaultEffort: "low",
     },
     {
-      id: "claude-sonnet-5-5",
-      name: "Claude Sonnet 5.5",
+      id: "claude-3-5-haiku",
+      name: "Claude 3.5 Haiku",
+      efforts: ["low"],
+      defaultEffort: "low",
+    },
+    {
+      id: "claude-fable-5-1",
+      name: "Claude Fable 5.1",
+      efforts: ["high", "medium", "low"],
+      defaultEffort: "high",
+    },
+    {
+      id: "claude-mythos-5-1",
+      name: "Claude Mythos 5.1",
       efforts: ["high", "medium", "low"],
       defaultEffort: "high",
     },
@@ -215,9 +251,12 @@ export class ClaudeClient {
         true,
       ) as string
     )?.trim();
-    if (!raw) return "sonnet";
+    if (!raw) return "claude-sonnet-5-5";
+    if (raw === "sonnet") return "claude-sonnet-5-5";
+    if (raw === "opus") return "claude-opus-5-5";
+    if (raw === "haiku") return "claude-haiku-4-5";
     const found = ClaudeClient.AVAILABLE_MODELS.find((m) => m.id === raw);
-    return found ? found.id : "sonnet";
+    return found ? found.id : "claude-sonnet-5-5";
   }
 
   public static setModel(model: string): void {
@@ -324,8 +363,14 @@ export class ClaudeClient {
     if (model) {
       args.push("--model", model);
     }
-    if (effort) {
-      args.push("--effort", effort);
+    const modelDef = ClaudeClient.AVAILABLE_MODELS.find((m) => m.id === model);
+    if (modelDef && modelDef.efforts.length > 0) {
+      const activeEffort = modelDef.efforts.includes(effort)
+        ? effort
+        : modelDef.defaultEffort;
+      if (activeEffort) {
+        args.push("--effort", activeEffort);
+      }
     }
 
     const homeDir = ClaudeClient.getHomeDir();
