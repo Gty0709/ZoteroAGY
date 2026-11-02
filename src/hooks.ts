@@ -147,8 +147,19 @@ export function debugLog(msg: string) {
     const text = `[HOOK ${new Date().toISOString()}] ${msg}\r\n`;
     try {
       // @ts-ignore
+      if (typeof dump !== "undefined") dump(text);
+      // @ts-ignore
       if (typeof Zotero !== "undefined" && Zotero.debug)
         Zotero.debug("[ZoteroAGY] " + msg);
+    } catch (_) {}
+    try {
+      // @ts-ignore
+      if (typeof IOUtils !== "undefined" && typeof PathUtils !== "undefined") {
+        // @ts-ignore
+        const p = PathUtils.join(PathUtils.profileDir, "agy_debug.log");
+        // @ts-ignore
+        IOUtils.writeUTF8(p, text, { mode: "append" });
+      }
     } catch (_) {}
     try {
       // @ts-ignore

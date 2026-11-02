@@ -5,13 +5,13 @@
 </p>
 
 <p align="center">
-  <strong>Next-Generation AI Research Assistant for Zotero 7</strong><br/>
+  <strong>Next-Generation AI Research Assistant for Zotero 7 & 10</strong><br/>
   Powered by Local <strong>Antigravity CLI (agy)</strong> · Dual-Mode UI (Sidebar & Pinned Standalone Window) · Obsidian-Style Typography · Bidirectional Annotation Card Sync · KaTeX & Mermaid Diagrams
 </p>
 
 <p align="center">
   <a href="https://github.com/Gty0709/ZoteroAGY/releases"><img src="https://img.shields.io/badge/Release-v1.2.4-2b7fff.svg" alt="Release" /></a>
-  <a href="https://www.zotero.org/"><img src="https://img.shields.io/badge/Zotero-7.0%2B-red.svg" alt="Zotero" /></a>
+  <a href="https://www.zotero.org/"><img src="https://img.shields.io/badge/Zotero-7.0%2B%20%7C%2010.0%2B-red.svg" alt="Zotero" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg" alt="License" /></a>
   <img src="https://img.shields.io/badge/TypeScript-5.9-3178c6.svg" alt="TypeScript" />
   <img src="https://img.shields.io/badge/Engine-Antigravity_CLI-188038.svg" alt="Antigravity CLI" />
@@ -241,7 +241,7 @@ This project is licensed under the [GNU Affero General Public License v3.0 or la
 
 ## 项目简介
 
-**Zotero AGY** 是专为 **Zotero 7** 打造的深度学术研究与文献精读 AI 插件。
+**Zotero AGY** 是专为 **Zotero 7 & 10** 打造的深度学术研究与文献精读 AI 插件。
 
 - ⚡ **无 API Key 限制**：由本地 **Antigravity CLI (`agy`)** 原生驱动，畅享前沿模型生态（Gemini 3.8 / 3.1 Pro、Claude Sonnet/Opus 等），打字机极速流式响应。
 - 🐧 **Linux 本机原生适配**：深度适配 Linux 桌面环境与环境变量，全面覆盖 `~/.local/bin/agy`、`~/.gemini/antigravity/bin/agy`、`/usr/local/bin` 等目录与 shell 回退检测。
@@ -255,6 +255,6 @@ This project is licensed under the [GNU Affero General Public License v3.0 or la
 ### 安装与使用
 
 1. 在 [Releases 页面](https://github.com/Gty0709/ZoteroAGY/releases) 下载 `zotero-agy.xpi`；
-2. 打开 Zotero 7 -> 工具 -> 插件 -> 齿轮图标 -> `Install Add-on From File...`；
+2. 打开 Zotero 7 / 10 -> 工具 -> 插件 -> 齿轮图标 -> `Install Add-on From File...`；
 3. 选择下载好的 `.xpi` 文件安装并重启 Zotero；
 4. 进入 **设置 -> ZoteroAGY**，可直接点击「🔍 自动寻找」一键识别本地 CLI 并测试连接！

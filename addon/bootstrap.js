@@ -7,9 +7,17 @@
 
 function bootLog(msg) {
   try {
+    const formatted = "[BOOT " + new Date().toISOString() + "] " + msg;
     try {
+      if (typeof dump !== "undefined") dump(formatted + "\n");
       if (typeof Zotero !== "undefined" && Zotero.debug)
         Zotero.debug("[AGY-BOOT] " + msg);
+    } catch (_) {}
+    try {
+      if (typeof IOUtils !== "undefined" && typeof PathUtils !== "undefined") {
+        const p = PathUtils.join(PathUtils.profileDir, "agy_debug.log");
+        IOUtils.writeUTF8(p, formatted + "\r\n", { mode: "append" });
+      }
     } catch (_) {}
     try {
       const file = Components.classes[
@@ -46,9 +54,7 @@ function bootLog(msg) {
         "@mozilla.org/intl/converter-output-stream;1"
       ].createInstance(Components.interfaces.nsIConverterOutputStream);
       converter.init(foStream, "UTF-8", 0, 0);
-      converter.writeString(
-        "[BOOT " + new Date().toISOString() + "] " + msg + "\r\n",
-      );
+      converter.writeString(formatted + "\r\n");
       converter.close();
     } catch (e) {}
   } catch (e) {}
