@@ -11,7 +11,14 @@ export interface QuotaState {
 }
 
 export class QuotaManager {
-  private static readonly PREF_KEY = `${addon.data.config.prefsPrefix}.quotaState`;
+  private static getPrefKey(): string {
+    const prefix =
+      typeof addon !== "undefined" && addon?.data?.config?.prefsPrefix
+        ? addon.data.config.prefsPrefix
+        : "extensions.zoteroagy";
+    return `${prefix}.quotaState`;
+  }
+
   private static listeners: Set<(state: QuotaState) => void> = new Set();
 
   private static currentState: QuotaState = {
@@ -29,7 +36,7 @@ export class QuotaManager {
     if (QuotaManager.isInitialized) return;
     QuotaManager.isInitialized = true;
     try {
-      const saved = Zotero.Prefs.get(QuotaManager.PREF_KEY, true) as string;
+      const saved = Zotero.Prefs.get(QuotaManager.getPrefKey(), true) as string;
       if (saved) {
         const parsed = JSON.parse(saved);
         QuotaManager.currentState = { ...QuotaManager.currentState, ...parsed };
@@ -60,7 +67,7 @@ export class QuotaManager {
   private static persist(): void {
     try {
       Zotero.Prefs.set(
-        QuotaManager.PREF_KEY,
+        QuotaManager.getPrefKey(),
         JSON.stringify(QuotaManager.currentState),
         true,
       );

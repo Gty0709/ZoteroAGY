@@ -50,26 +50,36 @@ export class ChatManager {
 
   static getActiveEngine(): "agy" | "claude" {
     try {
+      const prefix =
+        typeof addon !== "undefined" && addon?.data?.config?.prefsPrefix
+          ? addon.data.config.prefsPrefix
+          : "extensions.zoteroagy";
       const saved = Zotero.Prefs.get(
-        `${addon.data.config.prefsPrefix}.activeEngine`,
+        `${prefix}.activeEngine`,
         true,
       ) as string;
       if (saved === "claude" || saved === "agy") {
-        addon.data.chat.activeEngine = saved;
+        if (typeof addon !== "undefined" && addon?.data?.chat) {
+          addon.data.chat.activeEngine = saved;
+        }
         return saved;
       }
     } catch (_) {}
-    return addon.data.chat.activeEngine || "agy";
+    return (
+      (typeof addon !== "undefined" && addon?.data?.chat?.activeEngine) || "agy"
+    );
   }
 
   static setActiveEngine(engine: "agy" | "claude"): void {
-    addon.data.chat.activeEngine = engine;
+    if (typeof addon !== "undefined" && addon?.data?.chat) {
+      addon.data.chat.activeEngine = engine;
+    }
     try {
-      Zotero.Prefs.set(
-        `${addon.data.config.prefsPrefix}.activeEngine`,
-        engine,
-        true,
-      );
+      const prefix =
+        typeof addon !== "undefined" && addon?.data?.config?.prefsPrefix
+          ? addon.data.config.prefsPrefix
+          : "extensions.zoteroagy";
+      Zotero.Prefs.set(`${prefix}.activeEngine`, engine, true);
     } catch (_) {}
   }
 

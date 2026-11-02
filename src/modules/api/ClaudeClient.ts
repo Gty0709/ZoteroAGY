@@ -152,10 +152,17 @@ export class ClaudeClient {
     return null;
   }
 
+  static getPrefPrefix(): string {
+    return (
+      (typeof addon !== "undefined" && addon?.data?.config?.prefsPrefix) ||
+      "extensions.zoteroagy"
+    );
+  }
+
   static async findClaudePath(): Promise<string | null> {
     const customPath = (
       Zotero.Prefs.get(
-        `${addon.data.config.prefsPrefix}.claudePath`,
+        `${ClaudeClient.getPrefPrefix()}.claudePath`,
         true,
       ) as string
     )?.trim();
@@ -204,7 +211,7 @@ export class ClaudeClient {
   public static getModel(): string {
     const raw = (
       Zotero.Prefs.get(
-        `${addon.data.config.prefsPrefix}.claudeModel`,
+        `${ClaudeClient.getPrefPrefix()}.claudeModel`,
         true,
       ) as string
     )?.trim();
@@ -215,7 +222,7 @@ export class ClaudeClient {
 
   public static setModel(model: string): void {
     Zotero.Prefs.set(
-      `${addon.data.config.prefsPrefix}.claudeModel`,
+      `${ClaudeClient.getPrefPrefix()}.claudeModel`,
       model,
       true,
     );
@@ -224,7 +231,7 @@ export class ClaudeClient {
   public static getEffort(): string {
     const raw = (
       Zotero.Prefs.get(
-        `${addon.data.config.prefsPrefix}.claudeEffort`,
+        `${ClaudeClient.getPrefPrefix()}.claudeEffort`,
         true,
       ) as string
     )?.trim();
@@ -236,7 +243,7 @@ export class ClaudeClient {
 
   public static setEffort(effort: string): void {
     Zotero.Prefs.set(
-      `${addon.data.config.prefsPrefix}.claudeEffort`,
+      `${ClaudeClient.getPrefPrefix()}.claudeEffort`,
       effort,
       true,
     );
