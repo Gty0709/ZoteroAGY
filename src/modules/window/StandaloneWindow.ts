@@ -38,37 +38,32 @@ export class StandaloneWindow {
       loadLock: (Zotero.Promise as any).defer(),
     };
 
-    // Open standalone XUL window as independent top-level window (no parent to avoid Win32 owned-window lock)
+    // Open standalone XUL window
     const mainWindow = Zotero.getMainWindow() as any;
-    const Ci = (Components as any)?.interfaces;
-    const ww =
-      mainWindow?.Services?.ww ||
-      (typeof Services !== "undefined" ? (Services as any)?.ww : null) ||
-      (Components as any)?.classes?.["@mozilla.org/embedcomp/window-watcher;1"]?.getService?.(
-        Ci?.nsIWindowWatcher,
-      );
-
-    let win: Window;
-    if (ww?.openWindow) {
-      win = ww.openWindow(
-        null,
-        `chrome://${addon.data.config.addonRef}/content/standalone.xhtml`,
-        `${addon.data.config.addonRef}-standalone`,
-        features,
-        dialogData,
-      );
-    } else {
-      win = mainWindow.openDialog(
-        `chrome://${addon.data.config.addonRef}/content/standalone.xhtml`,
-        `${addon.data.config.addonRef}-standalone`,
-        features,
-        dialogData,
-      );
-    }
+    const win = mainWindow.openDialog(
+      `chrome://${addon.data.config.addonRef}/content/standalone.xhtml`,
+      `${addon.data.config.addonRef}-standalone`,
+      features,
+      dialogData,
+    );
 
     this.win = win;
 
-    await dialogData.loadLock.promise;
+    // Multi-tier load wait: lock promise, window load event, DOM ready, and safety timeout
+    await Promise.race([
+      dialogData.loadLock.promise,
+      new Promise<void>((resolve) => {
+        if (
+          win.document?.readyState === "complete" ||
+          win.document?.readyState === "interactive"
+        ) {
+          resolve();
+        } else {
+          win.addEventListener("load", () => resolve(), { once: true });
+          win.setTimeout(resolve, 600);
+        }
+      }),
+    ]);
 
     // Apply always-on-top flags to window
     StandaloneWindow.setWindowAlwaysOnTop(win, keepOnTop);
@@ -108,35 +103,53 @@ export class StandaloneWindow {
       });
     }
 
-    const root = win.document.getElementById(
+    let root = win.document?.getElementById(
       "zoteroagy-standalone-root",
     ) as HTMLElement;
-    if (root) {
-      // Build AGY panel in standalone window
-      this.panelInstance = ChatView.createPanel(win.document, true);
-      root.appendChild(this.panelInstance.panel);
-      ChatView.renderHistoryForPanel(this.panelInstance);
-      ChatView.renderContextsForPanel(this.panelInstance);
-      ChatView.updateAuthStatusForPanel(this.panelInstance);
-      ChatView.updateQuotaForPanel(
-        this.panelInstance,
-        QuotaManager.getState(),
-      );
-      ChatView.refreshLiveQuota();
+    if (!root) {
+      await new Promise((r) => win.setTimeout(r, 150));
+      root = win.document?.getElementById(
+        "zoteroagy-standalone-root",
+      ) as HTMLElement;
+    }
 
-      if (this.panelInstance.pinButton) {
-        this.panelInstance.pinButton.textContent = keepOnTop
-          ? "📌 已置顶"
-          : "📍 未置顶";
-        this.panelInstance.pinButton.style.color = keepOnTop
-          ? "#188038"
-          : "#666";
-        this.panelInstance.pinButton.style.borderColor = keepOnTop
-          ? "#188038"
-          : "rgba(0,0,0,0.18)";
-        this.panelInstance.pinButton.title = keepOnTop
-          ? "当前状态：已置顶在屏幕最前端（点击取消置顶）"
-          : "当前状态：未置顶（点击开启屏幕置顶）";
+    if (root) {
+      try {
+        // Build AGY panel in standalone window
+        this.panelInstance = ChatView.createPanel(win.document, true);
+        if (root.replaceChildren) {
+          root.replaceChildren(this.panelInstance.panel);
+        } else {
+          root.innerHTML = "";
+          root.appendChild(this.panelInstance.panel);
+        }
+        ChatView.renderHistoryForPanel(this.panelInstance);
+        ChatView.renderContextsForPanel(this.panelInstance);
+        ChatView.updateAuthStatusForPanel(this.panelInstance);
+        ChatView.updateQuotaForPanel(
+          this.panelInstance,
+          QuotaManager.getState(),
+        );
+        ChatView.refreshLiveQuota();
+
+        if (this.panelInstance.pinButton) {
+          this.panelInstance.pinButton.textContent = keepOnTop
+            ? "📌 已置顶"
+            : "📍 未置顶";
+          this.panelInstance.pinButton.style.color = keepOnTop
+            ? "#188038"
+            : "#666";
+          this.panelInstance.pinButton.style.borderColor = keepOnTop
+            ? "#188038"
+            : "rgba(0,0,0,0.18)";
+          this.panelInstance.pinButton.title = keepOnTop
+            ? "当前状态：已置顶在屏幕最前端（点击取消置顶）"
+            : "当前状态：未置顶（点击开启屏幕置顶）";
+        }
+      } catch (err: any) {
+        if (typeof ztoolkit !== "undefined" && ztoolkit.log) {
+          ztoolkit.log("StandaloneWindow build error:", err);
+        }
       }
     }
 

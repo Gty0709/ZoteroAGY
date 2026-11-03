@@ -18,23 +18,6 @@
   height="720"
   onload="if (window.arguments &amp;&amp; window.arguments[0] &amp;&amp; window.arguments[0].loadLock) window.arguments[0].loadLock.resolve();"
 >
-  <commandset id="editMenuCommands">
-    <command id="cmd_undo" oncommand="goDoCommand('cmd_undo')" />
-    <command id="cmd_redo" oncommand="goDoCommand('cmd_redo')" />
-    <command id="cmd_cut" oncommand="goDoCommand('cmd_cut')" />
-    <command id="cmd_copy" oncommand="goDoCommand('cmd_copy')" />
-    <command id="cmd_paste" oncommand="goDoCommand('cmd_paste')" />
-    <command id="cmd_delete" oncommand="goDoCommand('cmd_delete')" />
-    <command id="cmd_selectAll" oncommand="goDoCommand('cmd_selectAll')" />
-  </commandset>
-  <keyset id="editMenuKeys">
-    <key id="key_undo" key="z" modifiers="accel" command="cmd_undo" />
-    <key id="key_redo" key="y" modifiers="accel" command="cmd_redo" />
-    <key id="key_cut" key="x" modifiers="accel" command="cmd_cut" />
-    <key id="key_copy" key="c" modifiers="accel" command="cmd_copy" />
-    <key id="key_paste" key="v" modifiers="accel" command="cmd_paste" />
-    <key id="key_selectAll" key="a" modifiers="accel" command="cmd_selectAll" />
-  </keyset>
   <html:script src="chrome://zoteroagy/content/mermaid.min.js"></html:script>
   <html:body id="zoteroagy-standalone-root" style="height: 100%; width: 100%; margin: 0; padding: 0; display: flex; flex-direction: column; box-sizing: border-box; background: var(--material-background, #f9f9fa); overflow: hidden; -moz-user-select: text; user-select: text;"></html:body>
 </window>
