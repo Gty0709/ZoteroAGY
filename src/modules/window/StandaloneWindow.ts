@@ -239,12 +239,12 @@ fi
       const Subprocess = StandaloneWindow.getSubprocess();
       if (!Subprocess) return;
 
-      const psScript = `
+      const psCode = `
 Add-Type -TypeDefinition @"
 using System;
 using System.Text;
 using System.Runtime.InteropServices;
-public class WinPinner {
+public class WinPinHelper {
     public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
     [DllImport("user32.dll")]
     public static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
@@ -254,24 +254,16 @@ public class WinPinner {
     public static extern bool IsWindowVisible(IntPtr hWnd);
     [DllImport("user32.dll")]
     public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
-    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr")]
-    private static extern IntPtr SetWindowLongPtr64(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
-    [DllImport("user32.dll", EntryPoint = "SetWindowLong")]
-    private static extern int SetWindowLong32(IntPtr hWnd, int nIndex, int dwNewLong);
 
-    public static void Pin(bool onTop) {
+    public static void SetPin(bool top) {
         EnumWindows((hWnd, lParam) => {
             if (IsWindowVisible(hWnd)) {
                 StringBuilder sb = new StringBuilder(512);
                 GetWindowTextW(hWnd, sb, 512);
                 string t = sb.ToString();
-                if (t.IndexOf("AGY", StringComparison.OrdinalIgnoreCase) >= 0) {
-                    IntPtr insertAfter = onTop ? new IntPtr(-1) : new IntPtr(-2);
-                    if (!onTop) {
-                        if (IntPtr.Size == 8) SetWindowLongPtr64(hWnd, -8, IntPtr.Zero);
-                        else SetWindowLong32(hWnd, -8, 0);
-                    }
-                    SetWindowPos(hWnd, insertAfter, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010);
+                if (t.IndexOf("AGY", StringComparison.OrdinalIgnoreCase) >= 0 || t.IndexOf("Antigravity", StringComparison.OrdinalIgnoreCase) >= 0) {
+                    IntPtr target = top ? new IntPtr(-1) : new IntPtr(-2);
+                    SetWindowPos(hWnd, target, 0, 0, 0, 0, 3);
                 }
             }
             return true;
@@ -279,22 +271,48 @@ public class WinPinner {
     }
 }
 "@
-[WinPinner]::Pin(${onTop ? "$true" : "$false"})
+[WinPinHelper]::SetPin(${onTop ? "$true" : "$false"})
 `;
-      const proc = await Subprocess.call({
-        command: "powershell.exe",
-        arguments: [
-          "-NoProfile",
-          "-NonInteractive",
-          "-ExecutionPolicy",
-          "Bypass",
-          "-Command",
-          psScript,
-        ],
-        stdout: "ignore",
-        stderr: "ignore",
-      });
-      await proc.wait();
+
+      let binary = "";
+      for (let i = 0; i < psCode.length; i++) {
+        const code = psCode.charCodeAt(i);
+        binary += String.fromCharCode(code & 0xff);
+        binary += String.fromCharCode((code >> 8) & 0xff);
+      }
+      const b64 =
+        typeof btoa !== "undefined"
+          ? btoa(binary)
+          : (globalThis as any).btoa
+          ? (globalThis as any).btoa(binary)
+          : "";
+
+      if (!b64) return;
+
+      const candidates = [
+        "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+        "powershell.exe",
+      ];
+
+      for (const cmd of candidates) {
+        try {
+          const proc = await Subprocess.call({
+            command: cmd,
+            arguments: [
+              "-NoProfile",
+              "-NonInteractive",
+              "-ExecutionPolicy",
+              "Bypass",
+              "-EncodedCommand",
+              b64,
+            ],
+            stdout: "ignore",
+            stderr: "ignore",
+          });
+          await proc.wait();
+          break;
+        } catch (_) {}
+      }
     } catch (_) {}
   }
 
@@ -391,6 +409,9 @@ public class WinPinner {
 
     if (this.isOpen() && this.win) {
       await StandaloneWindow.setWindowAlwaysOnTop(this.win, next);
+      if (next) {
+        this.win.focus();
+      }
 
       // Update button visual
       if (this.panelInstance?.pinButton) {
