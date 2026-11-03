@@ -4,16 +4,17 @@
  * for both Standalone Window and Sidebar / Reader panels.
  */
 
-export async function copyText(
+export function copyText(
   text: string,
   doc?: Document,
-): Promise<boolean> {
+): boolean {
   if (!text) return false;
 
-  // 1. Zotero native internal clipboard helper
+  // 1. Zotero native internal clipboard helper (synchronous, reliable across all platforms)
   try {
-    if ((Zotero as any)?.Utilities?.Internal?.copyTextToClipboard) {
-      (Zotero as any).Utilities.Internal.copyTextToClipboard(text);
+    const util = (Zotero as any)?.Utilities?.Internal;
+    if (util?.copyTextToClipboard) {
+      util.copyTextToClipboard(text);
       return true;
     }
   } catch (_) {}
@@ -21,7 +22,8 @@ export async function copyText(
   // 2. XPCOM nsIClipboardHelper
   try {
     const Ci = (Components as any)?.interfaces;
-    const clipHelper = (Components as any)?.classes?.[
+    const Cc = (Components as any)?.classes;
+    const clipHelper = Cc?.[
       "@mozilla.org/widget/clipboardhelper;1"
     ]?.getService(Ci?.nsIClipboardHelper);
     if (clipHelper) {
@@ -34,7 +36,7 @@ export async function copyText(
   try {
     const nav = typeof navigator !== "undefined" ? navigator : null;
     if (nav?.clipboard?.writeText) {
-      await nav.clipboard.writeText(text);
+      nav.clipboard.writeText(text);
       return true;
     }
   } catch (_) {}
@@ -63,8 +65,12 @@ export async function copyText(
 export async function pasteText(): Promise<string> {
   // 1. Zotero native internal clipboard getter
   try {
-    if ((Zotero as any)?.Utilities?.Internal?.getClipboard) {
-      const text = (Zotero as any).Utilities.Internal.getClipboard("text/unicode");
+    const util = (Zotero as any)?.Utilities?.Internal;
+    if (util?.getClipboard) {
+      let text = util.getClipboard("text/unicode");
+      if (!text) {
+        text = util.getClipboard("text/plain");
+      }
       if (typeof text === "string" && text.length > 0) {
         return text;
       }
@@ -74,12 +80,9 @@ export async function pasteText(): Promise<string> {
   // 2. XPCOM nsIClipboard
   try {
     const Ci = (Components as any)?.interfaces;
-    const clip = (Components as any)?.classes?.[
-      "@mozilla.org/widget/clipboard;1"
-    ]?.getService(Ci?.nsIClipboard);
-    const trans = (Components as any)?.classes?.[
-      "@mozilla.org/widget/transferable;1"
-    ]?.createInstance(Ci?.nsITransferable);
+    const Cc = (Components as any)?.classes;
+    const clip = Cc?.["@mozilla.org/widget/clipboard;1"]?.getService(Ci?.nsIClipboard);
+    const trans = Cc?.["@mozilla.org/widget/transferable;1"]?.createInstance(Ci?.nsITransferable);
     if (clip && trans) {
       try {
         (trans as any).init?.(null);
@@ -101,7 +104,8 @@ export async function pasteText(): Promise<string> {
   try {
     const nav = typeof navigator !== "undefined" ? navigator : null;
     if (nav?.clipboard?.readText) {
-      return await nav.clipboard.readText();
+      const text = await nav.clipboard.readText();
+      if (text) return text;
     }
   } catch (_) {}
 
@@ -148,94 +152,162 @@ export function setupClipboardAndContextMenu(
 ): void {
   const win = doc.defaultView || (Zotero.getMainWindow() as any);
 
-  // 1. Keyboard shortcuts: Ctrl/Cmd + C, V, X, A in capture phase
-  panel.addEventListener(
-    "keydown",
-    async (e: KeyboardEvent) => {
-      const isAccel = (Zotero as any).isMac ? e.metaKey : e.ctrlKey;
-      if (!isAccel) return;
+  // Make panel focusable so clicks anywhere inside panel bring DOM focus into panel
+  panel.setAttribute("tabindex", "-1");
+  panel.style.outline = "none";
+  panel.addEventListener("mousedown", (e: MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (
+      target !== inputEl &&
+      !(target instanceof HTMLInputElement) &&
+      !(target instanceof HTMLTextAreaElement)
+    ) {
+      // Focus panel so keyboard events route directly to panel rather than outer Zotero chrome
+      const active = doc.activeElement;
+      if (!active || !panel.contains(active)) {
+        panel.focus();
+      }
+    }
+  });
 
-      const key = e.key.toLowerCase();
-      const activeEl = doc.activeElement as HTMLElement;
-      const isInput =
-        activeEl === inputEl ||
-        activeEl instanceof HTMLTextAreaElement ||
-        activeEl instanceof HTMLInputElement;
+  // Global capture-phase shortcut listener
+  const handleKeydown = async (e: KeyboardEvent) => {
+    const isAccel = (Zotero as any).isMac ? e.metaKey : e.ctrlKey;
+    if (!isAccel) return;
 
-      // --- Ctrl + C (Copy) ---
-      if (key === "c") {
-        const textToCopy = getSelectedText(doc, isInput ? activeEl : undefined);
-        if (textToCopy) {
+    const key = e.key.toLowerCase();
+    const activeEl = doc.activeElement as HTMLElement;
+
+    // Check if there is an active selection inside panel
+    const sel = doc.getSelection
+      ? doc.getSelection()
+      : win?.getSelection
+      ? win.getSelection()
+      : null;
+
+    let panelHasSelection = false;
+    let selectedText = "";
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+      try {
+        const range = sel.getRangeAt(0);
+        const ancestor = range.commonAncestorContainer;
+        if (
+          panel.contains(ancestor) ||
+          panel.contains(range.startContainer) ||
+          panel === ancestor
+        ) {
+          panelHasSelection = true;
+          selectedText = sel.toString();
+        }
+      } catch (_) {}
+    }
+
+    const isInputFocused =
+      activeEl === inputEl ||
+      (panel.contains(activeEl) &&
+        (activeEl instanceof HTMLTextAreaElement ||
+          activeEl instanceof HTMLInputElement));
+
+    // --- Ctrl + C (Copy) ---
+    if (key === "c") {
+      let textToCopy = "";
+      if (isInputFocused) {
+        const input = activeEl as HTMLTextAreaElement | HTMLInputElement;
+        const start = input.selectionStart ?? 0;
+        const end = input.selectionEnd ?? 0;
+        if (start !== end) {
+          textToCopy = input.value.substring(start, end);
+        }
+      }
+      if (!textToCopy && panelHasSelection) {
+        textToCopy = selectedText;
+      }
+      if (!textToCopy && (panel.contains(activeEl) || activeEl === panel)) {
+        textToCopy = getSelectedText(doc);
+      }
+
+      if (textToCopy) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        copyText(textToCopy, doc);
+      }
+    }
+
+    // --- Ctrl + V (Paste) ---
+    else if (key === "v") {
+      if (isInputFocused) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        const input = activeEl as HTMLTextAreaElement | HTMLInputElement;
+        const clipText = await pasteText();
+        if (clipText) {
+          const start = input.selectionStart ?? input.value.length;
+          const end = input.selectionEnd ?? input.value.length;
+          const val = input.value;
+          input.value = val.substring(0, start) + clipText + val.substring(end);
+          input.selectionStart = input.selectionEnd = start + clipText.length;
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+      }
+    }
+
+    // --- Ctrl + X (Cut) ---
+    else if (key === "x") {
+      if (isInputFocused) {
+        const input = activeEl as HTMLTextAreaElement | HTMLInputElement;
+        const start = input.selectionStart ?? 0;
+        const end = input.selectionEnd ?? 0;
+        if (start !== end) {
           e.preventDefault();
           e.stopPropagation();
-          await copyText(textToCopy, doc);
+          e.stopImmediatePropagation();
+          const cutText = input.value.substring(start, end);
+          copyText(cutText, doc);
+          const val = input.value;
+          input.value = val.substring(0, start) + val.substring(end);
+          input.selectionStart = input.selectionEnd = start;
+          input.dispatchEvent(new Event("input", { bubbles: true }));
         }
       }
+    }
 
-      // --- Ctrl + V (Paste) ---
-      else if (key === "v") {
-        if (isInput) {
-          e.preventDefault();
-          e.stopPropagation();
-          const input = activeEl as HTMLTextAreaElement | HTMLInputElement;
-          const clipText = await pasteText();
-          if (clipText) {
-            const start = input.selectionStart ?? input.value.length;
-            const end = input.selectionEnd ?? input.value.length;
-            const val = input.value;
-            input.value = val.substring(0, start) + clipText + val.substring(end);
-            input.selectionStart = input.selectionEnd = start + clipText.length;
-            input.dispatchEvent(new Event("input", { bubbles: true }));
-          }
-        }
+    // --- Ctrl + A (Select All) ---
+    else if (key === "a") {
+      if (isInputFocused) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        const input = activeEl as HTMLTextAreaElement | HTMLInputElement;
+        input.select();
       }
+    }
+  };
 
-      // --- Ctrl + X (Cut) ---
-      else if (key === "x") {
-        if (isInput) {
-          const input = activeEl as HTMLTextAreaElement | HTMLInputElement;
-          const start = input.selectionStart ?? 0;
-          const end = input.selectionEnd ?? 0;
-          if (start !== end) {
-            e.preventDefault();
-            e.stopPropagation();
-            const cutText = input.value.substring(start, end);
-            await copyText(cutText, doc);
-            const val = input.value;
-            input.value = val.substring(0, start) + val.substring(end);
-            input.selectionStart = input.selectionEnd = start;
-            input.dispatchEvent(new Event("input", { bubbles: true }));
-          }
-        }
-      }
+  // Attach keydown listener to panel, document, and window in CAPTURE phase (useCapture: true)
+  panel.addEventListener("keydown", handleKeydown, true);
+  doc.addEventListener("keydown", handleKeydown, true);
+  if (win && win !== doc.defaultView) {
+    try {
+      win.addEventListener("keydown", handleKeydown, true);
+    } catch (_) {}
+  }
 
-      // --- Ctrl + A (Select All) ---
-      else if (key === "a") {
-        if (isInput) {
-          e.preventDefault();
-          e.stopPropagation();
-          const input = activeEl as HTMLTextAreaElement | HTMLInputElement;
-          input.select();
-        }
-      }
-    },
-    true, // Capture phase ensures Zotero global keysets don't swallow clipboard shortcuts
-  );
-
-  // 2. Native copy event fallback
-  panel.addEventListener("copy", async (e: ClipboardEvent) => {
+  // Native copy event fallback
+  panel.addEventListener("copy", (e: ClipboardEvent) => {
     const textToCopy = getSelectedText(doc);
     if (textToCopy) {
       if (e.clipboardData) {
         e.clipboardData.setData("text/plain", textToCopy);
         e.preventDefault();
       } else {
-        await copyText(textToCopy, doc);
+        copyText(textToCopy, doc);
       }
     }
   });
 
-  // 3. Floating Right-Click Context Menu
+  // Floating Right-Click Context Menu
   let menu = panel.querySelector(".agy-context-menu") as HTMLElement;
   if (!menu) {
     menu = doc.createElement("div");
@@ -251,26 +323,16 @@ export function setupClipboardAndContextMenu(
     }
   };
 
-  // Close on ANY mousedown/pointerdown anywhere (capture phase) or Esc key
+  // Close context menu on ANY mousedown/pointerdown anywhere, Escape, blur, scroll
+  const onPointerDown = (e: Event) => {
+    if (menu && !menu.contains(e.target as Node)) {
+      hideMenu();
+    }
+  };
+
   if (win) {
-    win.addEventListener(
-      "pointerdown",
-      (e: Event) => {
-        if (menu && !menu.contains(e.target as Node)) {
-          hideMenu();
-        }
-      },
-      true,
-    );
-    win.addEventListener(
-      "mousedown",
-      (e: Event) => {
-        if (menu && !menu.contains(e.target as Node)) {
-          hideMenu();
-        }
-      },
-      true,
-    );
+    win.addEventListener("pointerdown", onPointerDown, true);
+    win.addEventListener("mousedown", onPointerDown, true);
     win.addEventListener(
       "keydown",
       (e: KeyboardEvent) => {
@@ -284,24 +346,8 @@ export function setupClipboardAndContextMenu(
     win.addEventListener("scroll", hideMenu, true);
   }
 
-  doc.addEventListener(
-    "pointerdown",
-    (e: Event) => {
-      if (menu && !menu.contains(e.target as Node)) {
-        hideMenu();
-      }
-    },
-    true,
-  );
-  doc.addEventListener(
-    "mousedown",
-    (e: Event) => {
-      if (menu && !menu.contains(e.target as Node)) {
-        hideMenu();
-      }
-    },
-    true,
-  );
+  doc.addEventListener("pointerdown", onPointerDown, true);
+  doc.addEventListener("mousedown", onPointerDown, true);
   panel.addEventListener("scroll", hideMenu, true);
 
   // Right-click contextmenu event
@@ -339,8 +385,8 @@ export function setupClipboardAndContextMenu(
 
     // If text is selected anywhere
     if (selText) {
-      addItem("📋", "复制 (Copy)", async () => {
-        await copyText(selText, doc);
+      addItem("📋", "复制 (Copy)", () => {
+        copyText(selText, doc);
       });
       addItem("💬", "引用到输入框 (Quote to Chat)", () => {
         if (inputEl) {
@@ -360,9 +406,9 @@ export function setupClipboardAndContextMenu(
       const hasInputSel = start !== end;
 
       if (hasInputSel) {
-        addItem("✂️", "剪切 (Cut)", async () => {
+        addItem("✂️", "剪切 (Cut)", () => {
           const cutText = input.value.substring(start, end);
-          await copyText(cutText, doc);
+          copyText(cutText, doc);
           const val = input.value;
           input.value = val.substring(0, start) + val.substring(end);
           input.selectionStart = input.selectionEnd = start;
