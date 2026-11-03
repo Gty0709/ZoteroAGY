@@ -10,10 +10,10 @@ export async function copyText(
 ): Promise<boolean> {
   if (!text) return false;
 
-  // 1. Zotero internal clipboard helper
+  // 1. Zotero native internal clipboard helper
   try {
     if ((Zotero as any)?.Utilities?.Internal?.copyTextToClipboard) {
-      await (Zotero as any).Utilities.Internal.copyTextToClipboard(text);
+      (Zotero as any).Utilities.Internal.copyTextToClipboard(text);
       return true;
     }
   } catch (_) {}
@@ -43,8 +43,7 @@ export async function copyText(
   try {
     const globalDoc = (globalThis as any).document;
     const targetDoc =
-      doc ||
-      (globalDoc || (Zotero.getMainWindow() as any)?.document);
+      doc || (globalDoc || (Zotero.getMainWindow() as any)?.document);
     if (targetDoc) {
       const el = targetDoc.createElement("textarea");
       el.value = text;
@@ -62,7 +61,17 @@ export async function copyText(
 }
 
 export async function pasteText(): Promise<string> {
-  // 1. XPCOM nsIClipboard + nsITransferable
+  // 1. Zotero native internal clipboard getter
+  try {
+    if ((Zotero as any)?.Utilities?.Internal?.getClipboard) {
+      const text = (Zotero as any).Utilities.Internal.getClipboard("text/unicode");
+      if (typeof text === "string" && text.length > 0) {
+        return text;
+      }
+    }
+  } catch (_) {}
+
+  // 2. XPCOM nsIClipboard
   try {
     const Ci = (Components as any)?.interfaces;
     const clip = (Components as any)?.classes?.[
@@ -72,11 +81,11 @@ export async function pasteText(): Promise<string> {
       "@mozilla.org/widget/transferable;1"
     ]?.createInstance(Ci?.nsITransferable);
     if (clip && trans) {
-      if ("init" in trans) {
-        trans.init(null);
-      }
+      try {
+        (trans as any).init?.(null);
+      } catch (_) {}
       trans.addDataFlavor("text/unicode");
-      clip.getData(trans, clip.kGlobalClipboard);
+      clip.getData(trans, 1); // 1 = kGlobalClipboard
       const data: any = {};
       trans.getTransferData("text/unicode", data);
       if (data.value) {
@@ -88,11 +97,44 @@ export async function pasteText(): Promise<string> {
     }
   } catch (_) {}
 
-  // 2. Modern navigator.clipboard API
+  // 3. Modern navigator.clipboard API
   try {
     const nav = typeof navigator !== "undefined" ? navigator : null;
     if (nav?.clipboard?.readText) {
       return await nav.clipboard.readText();
+    }
+  } catch (_) {}
+
+  return "";
+}
+
+export function getSelectedText(doc: Document, activeEl?: HTMLElement): string {
+  // 1. If active element is a text input or textarea
+  if (
+    activeEl instanceof HTMLTextAreaElement ||
+    activeEl instanceof HTMLInputElement
+  ) {
+    const start = activeEl.selectionStart ?? 0;
+    const end = activeEl.selectionEnd ?? 0;
+    if (start !== end) {
+      return activeEl.value.substring(start, end);
+    }
+  }
+
+  // 2. Document selection
+  try {
+    const docSel = doc.getSelection ? doc.getSelection() : null;
+    if (docSel && docSel.toString().trim()) {
+      return docSel.toString();
+    }
+  } catch (_) {}
+
+  // 3. Window selection
+  try {
+    const win = doc.defaultView || (Zotero.getMainWindow() as any);
+    const winSel = win?.getSelection ? win.getSelection() : null;
+    if (winSel && winSel.toString().trim()) {
+      return winSel.toString();
     }
   } catch (_) {}
 
@@ -106,7 +148,7 @@ export function setupClipboardAndContextMenu(
 ): void {
   const win = doc.defaultView || (Zotero.getMainWindow() as any);
 
-  // 1. Robust keyboard interception for Ctrl/Cmd + C, V, X, A in capture phase
+  // 1. Keyboard shortcuts: Ctrl/Cmd + C, V, X, A in capture phase
   panel.addEventListener(
     "keydown",
     async (e: KeyboardEvent) => {
@@ -122,20 +164,7 @@ export function setupClipboardAndContextMenu(
 
       // --- Ctrl + C (Copy) ---
       if (key === "c") {
-        let textToCopy = "";
-        if (isInput) {
-          const input = activeEl as HTMLTextAreaElement | HTMLInputElement;
-          const start = input.selectionStart ?? 0;
-          const end = input.selectionEnd ?? 0;
-          if (start !== end) {
-            textToCopy = input.value.substring(start, end);
-          }
-        }
-        if (!textToCopy) {
-          const sel = win?.getSelection ? win.getSelection() : null;
-          textToCopy = sel ? sel.toString() : "";
-        }
-
+        const textToCopy = getSelectedText(doc, isInput ? activeEl : undefined);
         if (textToCopy) {
           e.preventDefault();
           e.stopPropagation();
@@ -195,14 +224,13 @@ export function setupClipboardAndContextMenu(
 
   // 2. Native copy event fallback
   panel.addEventListener("copy", async (e: ClipboardEvent) => {
-    const sel = win?.getSelection ? win.getSelection() : null;
-    const selText = sel ? sel.toString() : "";
-    if (selText) {
+    const textToCopy = getSelectedText(doc);
+    if (textToCopy) {
       if (e.clipboardData) {
-        e.clipboardData.setData("text/plain", selText);
+        e.clipboardData.setData("text/plain", textToCopy);
         e.preventDefault();
       } else {
-        await copyText(selText, doc);
+        await copyText(textToCopy, doc);
       }
     }
   });
@@ -217,21 +245,74 @@ export function setupClipboardAndContextMenu(
   }
 
   const hideMenu = () => {
-    if (menu) menu.style.display = "none";
+    if (menu && menu.style.display !== "none") {
+      menu.style.display = "none";
+      menu.innerHTML = "";
+    }
   };
 
-  doc.addEventListener("click", hideMenu);
-  doc.addEventListener("scroll", hideMenu, true);
+  // Close on ANY mousedown/pointerdown anywhere (capture phase) or Esc key
+  if (win) {
+    win.addEventListener(
+      "pointerdown",
+      (e: Event) => {
+        if (menu && !menu.contains(e.target as Node)) {
+          hideMenu();
+        }
+      },
+      true,
+    );
+    win.addEventListener(
+      "mousedown",
+      (e: Event) => {
+        if (menu && !menu.contains(e.target as Node)) {
+          hideMenu();
+        }
+      },
+      true,
+    );
+    win.addEventListener(
+      "keydown",
+      (e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          hideMenu();
+        }
+      },
+      true,
+    );
+    win.addEventListener("blur", hideMenu, true);
+    win.addEventListener("scroll", hideMenu, true);
+  }
+
+  doc.addEventListener(
+    "pointerdown",
+    (e: Event) => {
+      if (menu && !menu.contains(e.target as Node)) {
+        hideMenu();
+      }
+    },
+    true,
+  );
+  doc.addEventListener(
+    "mousedown",
+    (e: Event) => {
+      if (menu && !menu.contains(e.target as Node)) {
+        hideMenu();
+      }
+    },
+    true,
+  );
   panel.addEventListener("scroll", hideMenu, true);
 
+  // Right-click contextmenu event
   panel.addEventListener("contextmenu", (e: MouseEvent) => {
     const target = e.target as HTMLElement;
-    const sel = win?.getSelection ? win.getSelection() : null;
-    const selText = sel ? sel.toString().trim() : "";
     const isInput =
       target === inputEl ||
       target instanceof HTMLTextAreaElement ||
       target instanceof HTMLInputElement;
+
+    const selText = getSelectedText(doc, isInput ? target : undefined).trim();
 
     menu.innerHTML = "";
     let hasItems = false;
@@ -244,17 +325,19 @@ export function setupClipboardAndContextMenu(
       const item = doc.createElement("div");
       item.className = "agy-context-menu-item";
       item.innerHTML = `<span class="agy-context-menu-icon">${icon}</span><span>${label}</span>`;
-      item.addEventListener("mousedown", async (ev) => {
+      item.addEventListener("click", async (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
         hideMenu();
-        await handler();
+        try {
+          await handler();
+        } catch (_) {}
       });
       menu.appendChild(item);
       hasItems = true;
     };
 
-    // If text is selected anywhere in panel or input
+    // If text is selected anywhere
     if (selText) {
       addItem("📋", "复制 (Copy)", async () => {
         await copyText(selText, doc);
@@ -313,7 +396,6 @@ export function setupClipboardAndContextMenu(
     }
 
     if (!hasItems) {
-      // General empty click menu option: Paste to chat if input exists
       addItem("📋", "粘贴至输入框", async () => {
         const text = await pasteText();
         if (text && inputEl) {
@@ -327,16 +409,16 @@ export function setupClipboardAndContextMenu(
     // Position menu within panel bounds
     const panelRect = panel.getBoundingClientRect();
     const x = Math.min(
-      e.clientX - panelRect.left,
+      Math.max(10, e.clientX - panelRect.left),
       Math.max(10, panelRect.width - 180),
     );
     const y = Math.min(
-      e.clientY - panelRect.top,
-      Math.max(10, panelRect.height - 160),
+      Math.max(10, e.clientY - panelRect.top),
+      Math.max(10, panelRect.height - 180),
     );
 
-    menu.style.left = `${Math.max(4, x)}px`;
-    menu.style.top = `${Math.max(4, y)}px`;
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
     menu.style.display = "block";
 
     e.preventDefault();
