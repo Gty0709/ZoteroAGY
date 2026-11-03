@@ -66,7 +66,7 @@ export class StandaloneWindow {
     ]);
 
     // Apply always-on-top flags to window
-    StandaloneWindow.setWindowAlwaysOnTop(win, keepOnTop);
+    await StandaloneWindow.setWindowAlwaysOnTop(win, keepOnTop);
 
     // Platform native pin adjustments
     const title = win.document?.title || "AGY 智能助手";
@@ -244,7 +244,7 @@ Add-Type -TypeDefinition @"
 using System;
 using System.Text;
 using System.Runtime.InteropServices;
-public class WinPin {
+public class WinPinner {
     public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
     [DllImport("user32.dll")]
     public static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
@@ -258,29 +258,28 @@ public class WinPin {
     private static extern IntPtr SetWindowLongPtr64(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
     [DllImport("user32.dll", EntryPoint = "SetWindowLong")]
     private static extern int SetWindowLong32(IntPtr hWnd, int nIndex, int dwNewLong);
-    public static IntPtr SetOwner(IntPtr hWnd, IntPtr hOwner) {
-        if (IntPtr.Size == 8) return SetWindowLongPtr64(hWnd, -8, hOwner);
-        return new IntPtr(SetWindowLong32(hWnd, -8, hOwner.ToInt32()));
+
+    public static void Pin(bool onTop) {
+        EnumWindows((hWnd, lParam) => {
+            if (IsWindowVisible(hWnd)) {
+                StringBuilder sb = new StringBuilder(512);
+                GetWindowTextW(hWnd, sb, 512);
+                string t = sb.ToString();
+                if (t.IndexOf("AGY", StringComparison.OrdinalIgnoreCase) >= 0) {
+                    IntPtr insertAfter = onTop ? new IntPtr(-1) : new IntPtr(-2);
+                    if (!onTop) {
+                        if (IntPtr.Size == 8) SetWindowLongPtr64(hWnd, -8, IntPtr.Zero);
+                        else SetWindowLong32(hWnd, -8, 0);
+                    }
+                    SetWindowPos(hWnd, insertAfter, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010);
+                }
+            }
+            return true;
+        }, IntPtr.Zero);
     }
 }
 "@
-[WinPin]::EnumWindows({
-    param($hwnd, $lparam)
-    if ([WinPin]::IsWindowVisible($hwnd)) {
-        $sb = New-Object System.Text.StringBuilder 512
-        [WinPin]::GetWindowTextW($hwnd, $sb, 512) | Out-Null
-        $t = $sb.ToString()
-        if ($t.Contains("AGY") -and $t.Contains("智能助手")) {
-            if (${onTop ? '$true' : '$false'}) {
-                [WinPin]::SetWindowPos($hwnd, [IntPtr](-1), 0, 0, 0, 0, 19)
-            } else {
-                [WinPin]::SetOwner($hwnd, [IntPtr]::Zero) | Out-Null
-                [WinPin]::SetWindowPos($hwnd, [IntPtr](-2), 0, 0, 0, 0, 19)
-            }
-        }
-    }
-    return $true
-}, [IntPtr]::Zero)
+[WinPinner]::Pin(${onTop ? "$true" : "$false"})
 `;
       const proc = await Subprocess.call({
         command: "powershell.exe",
@@ -299,7 +298,10 @@ public class WinPin {
     } catch (_) {}
   }
 
-  public static setWindowAlwaysOnTop(win: Window, onTop: boolean): boolean {
+  public static async setWindowAlwaysOnTop(
+    win: Window,
+    onTop: boolean,
+  ): Promise<boolean> {
     if (!win) return false;
     let applied = false;
 
@@ -316,6 +318,7 @@ public class WinPin {
     // 2. Query nsIAppWindow / nsIXULWindow interface and apply zLevel & flags
     try {
       const Ci = (Components as any)?.interfaces;
+      const Cc = (Components as any)?.classes;
       let appWin: any = null;
 
       try {
@@ -327,8 +330,14 @@ public class WinPin {
 
       if (!appWin) {
         try {
-          const wm = (Services as any)?.wm;
-          appWin = wm?.getAppWindowFor?.(win) || wm?.getXULWindowFor?.(win);
+          const ww =
+            (Services as any)?.ww ||
+            Cc?.["@mozilla.org/embedcomp/window-watcher;1"]?.getService?.(
+              Ci?.nsIWindowWatcher,
+            );
+          if (ww?.getXULWindowFor) {
+            appWin = ww.getXULWindowFor(win);
+          }
         } catch (_) {}
       }
 
@@ -358,10 +367,10 @@ public class WinPin {
     // 3. Platform specific native adjustments
     if ((Zotero as any).isLinux) {
       const title = win.document?.title || "AGY 智能助手";
-      StandaloneWindow.applyLinuxNativeAlwaysOnTop(title, onTop);
+      await StandaloneWindow.applyLinuxNativeAlwaysOnTop(title, onTop);
     } else if (Zotero.isWin) {
       const title = win.document?.title || "AGY 智能助手";
-      StandaloneWindow.applyWindowsNativeAlwaysOnTop(title, onTop);
+      await StandaloneWindow.applyWindowsNativeAlwaysOnTop(title, onTop);
     }
 
     return applied;
@@ -381,7 +390,7 @@ public class WinPin {
     );
 
     if (this.isOpen() && this.win) {
-      StandaloneWindow.setWindowAlwaysOnTop(this.win, next);
+      await StandaloneWindow.setWindowAlwaysOnTop(this.win, next);
 
       // Update button visual
       if (this.panelInstance?.pinButton) {
