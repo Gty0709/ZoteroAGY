@@ -31,6 +31,10 @@ function el<K extends keyof HTMLElementTagNameMap>(
 export interface AGYPanelInstance {
   doc: Document;
   panel: HTMLElement;
+  messagesWrapper?: HTMLElement;
+  turnNavContainer?: HTMLElement;
+  turnRailElement?: HTMLElement;
+  turnTooltipElement?: HTMLElement;
   messagesContainer: HTMLElement;
   contextContainer: HTMLElement;
   inputElement: HTMLTextAreaElement;
@@ -205,6 +209,19 @@ export class ChatView {
     );
     historyBtn.title = "查看与切换历史对话";
 
+    // Export Conversation Button
+    const exportBtn = el(
+      doc,
+      "button",
+      "agy-btn-icon",
+      "background: transparent; border: 1px solid rgba(0,0,0,0.15); border-radius: 4px; cursor: pointer; padding: 2px 6px; display: inline-flex; align-items: center; gap: 3px; color: #333;",
+      "📥 导出",
+    );
+    exportBtn.title = "导出当前对话记录为 Markdown (.md) 文件";
+    exportBtn.addEventListener("click", () => {
+      ChatView.exportConversation();
+    });
+
     let pinButton: HTMLElement | undefined;
     if (isStandalone) {
       const isPinned =
@@ -269,21 +286,42 @@ export class ChatView {
     settingsBtn.addEventListener("click", () => ChatView.openPreferences());
 
     actions.prepend(authStatus);
-    actions.append(zoomGroup, historyBtn, clearBtn, settingsBtn);
+    actions.append(zoomGroup, historyBtn, exportBtn, clearBtn, settingsBtn);
     header.append(title, actions);
     panel.appendChild(header);
+
+    // Messages wrapper (holds Turn Nav Rail on the left and Messages on the right)
+    const messagesWrapper = el(
+      doc,
+      "div",
+      "agy-messages-wrapper",
+      "flex: 1; display: flex; flex-direction: row; min-height: 0; position: relative; overflow: hidden; width: 100%; box-sizing: border-box;",
+    );
+
+    // Cursor-style Turn Nav Rail
+    const turnNav = el(doc, "div", "agy-turn-nav");
+    turnNav.title = "对话轮次导航 (点击跳至对应提问)";
+    const turnRail = el(doc, "div", "agy-turn-rail");
+    const turnTooltip = el(doc, "div", "agy-turn-tooltip");
+    turnNav.append(turnRail, turnTooltip);
+
+    turnNav.addEventListener("mouseleave", () => {
+      turnTooltip.classList.remove("visible");
+    });
 
     // Messages container
     const messages = el(
       doc,
       "div",
       "agy-messages",
-      "flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; background: var(--material-background, #f9f9fa);",
+      "flex: 1; min-width: 0; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; background: var(--material-background, #f9f9fa);",
     );
     messages.id = isStandalone
       ? "agy-standalone-messages-box"
       : "agy-messages-box";
-    panel.appendChild(messages);
+
+    messagesWrapper.append(turnNav, messages);
+    panel.appendChild(messagesWrapper);
 
     // Contexts box
     const contextsBox = el(doc, "div", "agy-contexts-box", "display: none;");
@@ -403,6 +441,10 @@ export class ChatView {
     const instance: AGYPanelInstance = {
       doc,
       panel,
+      messagesWrapper,
+      turnNavContainer: turnNav,
+      turnRailElement: turnRail,
+      turnTooltipElement: turnTooltip,
       messagesContainer: messages,
       contextContainer: contextsBox,
       inputElement: textarea,
@@ -422,6 +464,15 @@ export class ChatView {
       historyList: drawerList,
       fontSizeLabel,
     };
+
+    // Scroll listener on messages to sync active turn indicator
+    messages.addEventListener(
+      "scroll",
+      () => {
+        ChatView.syncActiveTurnTick(instance);
+      },
+      { passive: true },
+    );
 
     // Setup clipboard handling (Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+A) and floating context menu
     setupClipboardAndContextMenu(doc, panel, textarea);
@@ -575,6 +626,21 @@ export class ChatView {
 
       info.append(titleEl, metaEl);
 
+      const actionsGroup = el(doc, "div", "agy-history-actions");
+
+      const exportItemBtn = el(
+        doc,
+        "button",
+        "agy-history-export-btn",
+        "",
+        "📥",
+      );
+      exportItemBtn.title = "导出此对话为 Markdown (.md)";
+      exportItemBtn.addEventListener("click", (e: MouseEvent) => {
+        e.stopPropagation();
+        ChatView.exportConversation(conv.id);
+      });
+
       const delBtn = el(doc, "button", "agy-history-del-btn", "", "🗑️");
       delBtn.title = "删除此对话";
       delBtn.addEventListener("click", (e: MouseEvent) => {
@@ -584,7 +650,8 @@ export class ChatView {
         ChatView.refreshAllHistoryDrawers();
       });
 
-      item.append(info, delBtn);
+      actionsGroup.append(exportItemBtn, delBtn);
+      item.append(info, actionsGroup);
 
       item.addEventListener("click", () => {
         ChatManager.setActiveConversation(conv.id);
@@ -1030,10 +1097,15 @@ export class ChatView {
       emptyTip.innerHTML =
         "👋 你好！我是 AGY 智能学术助手。<br/>已连接本地 <strong>Antigravity CLI</strong> 与 <strong>Claude Code</strong>。<br/>在顶部点击 <strong>🟢 AGY CLI</strong> / <strong>🟣 Claude Code</strong> 可无损热切换引擎。<br/>在文献批注卡片上点击 <strong>✦</strong>，或在 PDF 中划词点击<strong>添加到 AGY</strong>，即可快速带入上下文。";
       instance.messagesContainer.appendChild(emptyTip);
+      ChatView.renderTurnNavForPanel(instance);
       return;
     }
 
+    let userTurnCounter = 0;
     for (const msg of conversation.messages) {
+      if (msg.role === "user") {
+        userTurnCounter++;
+      }
       ChatView.appendMessageDOM(
         instance,
         msg.role,
@@ -1041,10 +1113,12 @@ export class ChatView {
         msg.id,
         msg.contexts,
         msg.tokens,
+        msg.role === "user" ? userTurnCounter : undefined,
       );
     }
     ChatView.scrollToBottom(instance);
     ChatView.updateContextMeterForPanel(instance);
+    ChatView.renderTurnNavForPanel(instance);
   }
 
   private static renderStreamingChunks(
@@ -1135,6 +1209,11 @@ export class ChatView {
       currentEngine,
     );
 
+    const activeConv = ChatManager.getActiveConversation();
+    const currentTurnIndex = activeConv
+      ? activeConv.messages.filter((m) => m.role === "user").length
+      : 1;
+
     // Sync user message to all active panels
     for (const p of ChatView.panels) {
       if (p.panel?.isConnected && p.messagesContainer) {
@@ -1147,8 +1226,10 @@ export class ChatView {
           userMsg.id,
           contexts,
           userTokens,
+          currentTurnIndex,
         );
         ChatView.updateContextMeterForPanel(p);
+        ChatView.renderTurnNavForPanel(p);
       }
     }
 
@@ -1317,6 +1398,7 @@ export class ChatView {
         if (p.panel?.isConnected) {
           try {
             ChatView.scrollToBottom(p);
+            ChatView.renderTurnNavForPanel(p);
           } catch (_) {}
         }
       }
@@ -1330,6 +1412,7 @@ export class ChatView {
     msgId: string,
     contexts?: any[],
     tokens?: number,
+    turnIndex?: number,
   ): HTMLElement {
     const doc = instance.doc;
     if (!instance.messagesContainer)
@@ -1337,6 +1420,9 @@ export class ChatView {
 
     const msgWrapper = el(doc, "div", `agy-msg agy-msg-${role}`);
     msgWrapper.setAttribute("data-id", msgId);
+    if (role === "user" && typeof turnIndex === "number" && turnIndex > 0) {
+      msgWrapper.setAttribute("data-turn-index", String(turnIndex));
+    }
 
     const bubble = el(
       doc,
@@ -1677,6 +1763,286 @@ export class ChatView {
         })
         .show(3000);
     }
+  }
+
+  public static renderTurnNavForPanel(instance: AGYPanelInstance): void {
+    if (!instance.turnNavContainer || !instance.turnRailElement) return;
+    const nav = instance.turnNavContainer;
+    const rail = instance.turnRailElement;
+    const tooltip = instance.turnTooltipElement;
+    const doc = instance.doc;
+
+    rail.textContent = "";
+
+    const conversation = ChatManager.getActiveConversation();
+    if (!conversation || conversation.messages.length === 0) {
+      nav.style.display = "none";
+      return;
+    }
+
+    const userMessages: {
+      msg: any;
+      turnIndex: number;
+    }[] = [];
+
+    let counter = 0;
+    for (const m of conversation.messages) {
+      if (m.role === "user") {
+        counter++;
+        userMessages.push({
+          msg: m,
+          turnIndex: counter,
+        });
+      }
+    }
+
+    // Hide rail if there are 0 or only 1 question turn (matching Cursor behavior)
+    if (userMessages.length <= 1) {
+      nav.style.display = "none";
+      return;
+    }
+
+    nav.style.display = "flex";
+
+    for (const item of userMessages) {
+      const tick = el(doc, "div", "agy-turn-tick");
+      tick.setAttribute("data-turn-idx", String(item.turnIndex));
+      const dash = el(doc, "div", "agy-turn-dash");
+      tick.appendChild(dash);
+
+      let cleanPrompt = (item.msg.content || "").trim();
+      cleanPrompt = cleanPrompt
+        .replace(/#+\s+/g, "")
+        .replace(/[`*_\r\n]/g, " ")
+        .trim();
+      const previewText =
+        cleanPrompt.length > 80
+          ? cleanPrompt.slice(0, 80) + "..."
+          : cleanPrompt;
+
+      tick.addEventListener("mouseenter", () => {
+        if (!tooltip) return;
+        tooltip.textContent = "";
+
+        const tipHeader = el(
+          doc,
+          "div",
+          "agy-turn-tip-header",
+          "",
+          `第 ${item.turnIndex} 轮提问`,
+        );
+        const tipBody = el(
+          doc,
+          "div",
+          "agy-turn-tip-body",
+          "",
+          previewText || "提问内容",
+        );
+
+        tooltip.append(tipHeader, tipBody);
+        tooltip.classList.add("visible");
+
+        try {
+          const tickRect = tick.getBoundingClientRect();
+          const wrapperRect = instance.messagesWrapper
+            ? instance.messagesWrapper.getBoundingClientRect()
+            : tickRect;
+          let topOffset =
+            tickRect.top - wrapperRect.top + tickRect.height / 2 - 20;
+          topOffset = Math.max(
+            8,
+            Math.min(topOffset, wrapperRect.height - 75),
+          );
+          tooltip.style.top = `${topOffset}px`;
+        } catch (_) {}
+      });
+
+      tick.addEventListener("mouseleave", () => {
+        if (tooltip) tooltip.classList.remove("visible");
+      });
+
+      tick.addEventListener("click", (e: MouseEvent) => {
+        e.stopPropagation();
+        const targetEl = instance.messagesContainer.querySelector(
+          `[data-turn-index="${item.turnIndex}"]`,
+        ) as HTMLElement;
+        if (targetEl) {
+          targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
+          targetEl.classList.remove("agy-msg-pulse");
+          void targetEl.offsetWidth; // trigger reflow
+          targetEl.classList.add("agy-msg-pulse");
+          setTimeout(() => targetEl.classList.remove("agy-msg-pulse"), 1200);
+        }
+        ChatView.updateActiveTurnTick(instance, item.turnIndex);
+      });
+
+      rail.appendChild(tick);
+    }
+
+    ChatView.syncActiveTurnTick(instance);
+  }
+
+  public static syncActiveTurnTick(instance: AGYPanelInstance): void {
+    if (!instance.messagesContainer || !instance.turnRailElement) return;
+    const container = instance.messagesContainer;
+    const userMsgEls = container.querySelectorAll(
+      ".agy-msg-user[data-turn-index]",
+    );
+    if (userMsgEls.length === 0) return;
+
+    try {
+      const containerRect = container.getBoundingClientRect();
+      let activeIndex = 1;
+
+      for (let i = 0; i < userMsgEls.length; i++) {
+        const elItem = userMsgEls[i] as HTMLElement;
+        const rect = elItem.getBoundingClientRect();
+        if (rect.top - containerRect.top <= 120) {
+          activeIndex = parseInt(
+            elItem.getAttribute("data-turn-index") || "1",
+            10,
+          );
+        } else {
+          break;
+        }
+      }
+
+      ChatView.updateActiveTurnTick(instance, activeIndex);
+    } catch (_) {}
+  }
+
+  public static updateActiveTurnTick(
+    instance: AGYPanelInstance,
+    activeIndex: number,
+  ): void {
+    if (!instance.turnRailElement) return;
+    const ticks = instance.turnRailElement.querySelectorAll(".agy-turn-tick");
+    ticks.forEach((t: Element) => {
+      const idx = parseInt(t.getAttribute("data-turn-idx") || "0", 10);
+      if (idx === activeIndex) {
+        t.classList.add("active");
+      } else {
+        t.classList.remove("active");
+      }
+    });
+  }
+
+  public static async exportConversation(convId?: string): Promise<void> {
+    const result = ChatManager.exportConversationToMarkdown(convId);
+    if (!result || !result.markdown) {
+      new ztoolkit.ProgressWindow(addon.data.config.addonName)
+        .createLine({
+          text: "当前对话无消息记录，暂无内容可导出",
+          type: "warning",
+          progress: 100,
+        })
+        .show(2500);
+      return;
+    }
+
+    const sanitized = (result.title || "AGY学术对话")
+      .replace(/[\\/:*?"<>|\r\n]/g, "_")
+      .slice(0, 50)
+      .trim();
+
+    let saved = false;
+    try {
+      const win =
+        Zotero.getMainWindow?.() ||
+        (typeof (globalThis as any).window !== "undefined"
+          ? (globalThis as any).window
+          : null);
+      // @ts-ignore
+      const fp = Components.classes["@mozilla.org/filepicker;1"].createInstance(
+        // @ts-ignore
+        Components.interfaces.nsIFilePicker,
+      );
+      fp.init(
+        win,
+        "导出对话记录为 Markdown 文件",
+        // @ts-ignore
+        Components.interfaces.nsIFilePicker.modeSave,
+      );
+      fp.appendFilter("Markdown 文件 (*.md)", "*.md");
+      // @ts-ignore
+      fp.appendFilters(Components.interfaces.nsIFilePicker.filterAll);
+      fp.defaultString = `${sanitized}.md`;
+      fp.defaultExtension = "md";
+
+      const res = await new Promise<number>((resolve) => {
+        try {
+          const ret = fp.open((resCode: number) => resolve(resCode));
+          if (ret && typeof ret.then === "function") ret.then(resolve);
+        } catch (_) {
+          resolve(-1);
+        }
+      });
+
+      // @ts-ignore
+      if (
+        res === Components.interfaces.nsIFilePicker.returnOK ||
+        res === Components.interfaces.nsIFilePicker.returnReplace
+      ) {
+        let targetPath = fp.file?.path;
+        if (targetPath) {
+          if (!targetPath.toLowerCase().endsWith(".md")) {
+            targetPath += ".md";
+          }
+          try {
+            // @ts-ignore
+            if (typeof IOUtils !== "undefined" && IOUtils.writeUTF8) {
+              // @ts-ignore
+              await IOUtils.writeUTF8(targetPath, result.markdown);
+              saved = true;
+            }
+          } catch (_) {}
+
+          if (!saved) {
+            try {
+              if ((Zotero as any).File?.putContentsAsync) {
+                await (Zotero as any).File.putContentsAsync(
+                  targetPath,
+                  result.markdown,
+                );
+                saved = true;
+              } else if ((Zotero as any).File?.putContents) {
+                await (Zotero as any).File.putContents(
+                  fp.file,
+                  result.markdown,
+                );
+                saved = true;
+              }
+            } catch (_) {}
+          }
+
+          if (saved) {
+            new ztoolkit.ProgressWindow(addon.data.config.addonName)
+              .createLine({
+                text: `✅ 对话已成功导出为: ${fp.file?.leafName || targetPath}`,
+                type: "success",
+                progress: 100,
+              })
+              .show(3000);
+            return;
+          }
+        }
+      } else {
+        // User cancelled file picker dialog
+        return;
+      }
+    } catch (err: any) {
+      debugLog("ChatView.exportConversation filepicker error: " + err.message);
+    }
+
+    // Fallback: Copy Markdown content to clipboard
+    await copyText(result.markdown);
+    new ztoolkit.ProgressWindow(addon.data.config.addonName)
+      .createLine({
+        text: "Markdown 内容已复制到剪贴板！",
+        type: "information",
+        progress: 100,
+      })
+      .show(2500);
   }
 
   public static openPreferences(): void {

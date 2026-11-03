@@ -166,6 +166,80 @@ export class ChatManager {
     );
   }
 
+  static exportConversationToMarkdown(convId?: string): {
+    title: string;
+    markdown: string;
+  } {
+    const conv = convId
+      ? addon.data.chat.conversations.get(convId)
+      : ChatManager.getActiveConversation();
+    if (!conv || conv.messages.length === 0) {
+      return { title: "", markdown: "" };
+    }
+
+    const title = conv.title || "AGY学术对话";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const formatTime = (ts: number) => {
+      const d = new Date(ts);
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    };
+
+    let totalTokens = 0;
+    let userTurns = 0;
+    for (const m of conv.messages) {
+      if (typeof m.tokens === "number") totalTokens += m.tokens;
+      if (m.role === "user") userTurns++;
+    }
+
+    let md = `# 💬 ${title}\n\n`;
+    md += `> - **导出时间**: ${formatTime(Date.now())}\n`;
+    md += `> - **创建时间**: ${formatTime(conv.createdAt || Date.now())}\n`;
+    md += `> - **更新时间**: ${formatTime(conv.updatedAt || Date.now())}\n`;
+    md += `> - **问答轮次**: 共 ${userTurns} 轮提问 (${conv.messages.length} 条记录)\n`;
+    if (totalTokens > 0) {
+      md += `> - **总计消耗**: 约 ${totalTokens.toLocaleString()} tokens\n`;
+    }
+    md += `\n---\n\n`;
+
+    let currentTurn = 0;
+    for (const msg of conv.messages) {
+      const timeStr = formatTime(msg.timestamp);
+      if (msg.role === "user") {
+        currentTurn++;
+        md += `### 🧑 第 ${currentTurn} 轮提问 · 用户\n`;
+        md += `<small>*时间: ${timeStr}${msg.tokens ? ` · 消耗约 ${msg.tokens} tokens` : ""}*</small>\n\n`;
+        md += `${msg.content}\n\n`;
+
+        if (msg.contexts && msg.contexts.length > 0) {
+          md += `> **📌 关联文献 / 批注上下文**:\n`;
+          for (const ctx of msg.contexts) {
+            let typeLabel = "划词";
+            if (ctx.type === "annotation") typeLabel = "批注";
+            else if (ctx.type === "note") typeLabel = "笔记";
+            else if (ctx.type === "title") typeLabel = "文献";
+            else if (ctx.type === "abstract") typeLabel = "摘要";
+
+            const pageStr = ctx.page ? ` (第 ${ctx.page} 页)` : "";
+            const sourceStr = ctx.source ? ` [${ctx.source}]` : "";
+            md += `> - **[${typeLabel}${pageStr}${sourceStr}]**: ${ctx.text.replace(/\r?\n+/g, " ")}\n`;
+          }
+          md += `\n`;
+        }
+      } else if (msg.role === "assistant") {
+        const engineLabel =
+          msg.backend === "claude" ? "Claude Code" : "Antigravity (AGY)";
+        md += `### 🤖 第 ${currentTurn} 轮回答 · ${engineLabel}\n`;
+        md += `<small>*时间: ${timeStr}${msg.tokens ? ` · 消耗约 ${msg.tokens} tokens` : ""}*</small>\n\n`;
+        md += `${msg.content}\n\n`;
+        md += `---\n\n`;
+      } else if (msg.role === "system") {
+        md += `> ℹ️ **系统信息**: ${msg.content}\n\n`;
+      }
+    }
+
+    return { title, markdown: md };
+  }
+
   static deleteConversation(id: string): void {
     addon.data.chat.conversations.delete(id);
     if (addon.data.chat.activeConversationId === id) {
