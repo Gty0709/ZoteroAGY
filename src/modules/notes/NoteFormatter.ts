@@ -132,6 +132,12 @@ export class NoteFormatter {
             <div class="agy-mermaid-header">
               <span class="agy-mermaid-title">📊 Mermaid 流程图</span>
               <div class="agy-mermaid-btns">
+                <div class="agy-mermaid-zoom-controls">
+                  <button class="agy-mermaid-zoom-btn agy-mm-zoom-out" title="缩小图表">－</button>
+                  <button class="agy-mermaid-zoom-btn agy-mm-zoom-reset" title="恢复 100% 原始尺寸">100%</button>
+                  <button class="agy-mermaid-zoom-btn agy-mm-zoom-in" title="放大图表">＋</button>
+                  <button class="agy-mermaid-zoom-btn agy-mm-fit-toggle" title="切换：适应宽度 / 原始尺寸">↔️</button>
+                </div>
                 <button class="agy-mermaid-toggle-btn" title="查看/隐藏源码">源码</button>
                 <button class="agy-mermaid-copy-btn" title="复制源码">📋 复制</button>
               </div>
@@ -564,6 +570,10 @@ export class NoteFormatter {
       const outputEl = wrapper.querySelector(".agy-mermaid-output");
       const toggleBtn = wrapper.querySelector(".agy-mermaid-toggle-btn");
       const copyBtn = wrapper.querySelector(".agy-mermaid-copy-btn");
+      const zoomOutBtn = wrapper.querySelector(".agy-mm-zoom-out");
+      const zoomResetBtn = wrapper.querySelector(".agy-mm-zoom-reset");
+      const zoomInBtn = wrapper.querySelector(".agy-mm-zoom-in");
+      const fitToggleBtn = wrapper.querySelector(".agy-mm-fit-toggle");
       const codeView = wrapper.querySelector(
         ".agy-mermaid-code-view",
       ) as HTMLElement;
@@ -618,11 +628,15 @@ export class NoteFormatter {
               htmlLabels: false,
               theme: "default",
               fontFamily:
-                '"Anthropic Serif", "Copernicus", "华文书宋", "STShuSong", "华文宋体", "STSong", "华文中宋", "STZhongsong", serif',
+                '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif',
+              fontSize: 13,
               flowchart: {
                 htmlLabels: false,
                 useHtmlLabels: false,
                 curve: "basis",
+                nodeSpacing: 45,
+                rankSpacing: 45,
+                padding: 12,
               },
               sequence: {
                 useHtmlLabels: false,
@@ -700,10 +714,110 @@ export class NoteFormatter {
           try {
             const parser = new DOMParser();
             const parsedDoc = parser.parseFromString(svg, "text/html");
-            const svgEl = parsedDoc.querySelector("svg");
+            const svgEl = parsedDoc.querySelector("svg") as any;
             if (svgEl) {
               outputEl.textContent = "";
-              outputEl.appendChild(doc.importNode(svgEl, true));
+
+              // Extract natural viewBox dimensions
+              const vb = svgEl.getAttribute("viewBox");
+              let vbW = 0;
+              let vbH = 0;
+              if (vb) {
+                const parts = vb.trim().split(/[\s,]+/).map(Number);
+                if (parts.length === 4 && parts[2] > 0 && parts[3] > 0) {
+                  vbW = parts[2];
+                  vbH = parts[3];
+                }
+              }
+
+              // Remove width="100%" attribute that blows up small SVGs into gigantic letters
+              svgEl.removeAttribute("width");
+
+              // Natural base width
+              const baseWidth = vbW > 0 ? vbW : 520;
+              let isFitMode = baseWidth > 620;
+              let currentZoom = 100;
+
+              // Size appropriately:
+              // Small/medium diagram: render at 1:1 natural size, NEVER stretched
+              // Large diagram: fit to window initially with comfortable reading min-width
+              if (baseWidth <= 580) {
+                isFitMode = false;
+                svgEl.style.width = `${baseWidth}px`;
+                svgEl.style.maxWidth = "100%";
+              } else {
+                isFitMode = true;
+                svgEl.style.width = "100%";
+                svgEl.style.maxWidth = "100%";
+                svgEl.style.minWidth = `${Math.min(baseWidth, 480)}px`;
+              }
+              svgEl.style.height = "auto";
+
+              const importedSvg = doc.importNode(svgEl, true) as SVGSVGElement;
+              outputEl.appendChild(importedSvg);
+
+              // Wire interactive zoom controls
+              if (zoomInBtn) {
+                zoomInBtn.addEventListener("click", (e: Event) => {
+                  e.stopPropagation();
+                  isFitMode = false;
+                  currentZoom = Math.min(250, currentZoom + 15);
+                  const targetWidth = Math.round(
+                    baseWidth * (currentZoom / 100),
+                  );
+                  importedSvg.style.width = `${targetWidth}px`;
+                  importedSvg.style.maxWidth = "none";
+                  importedSvg.style.minWidth = "0px";
+                  if (zoomResetBtn)
+                    zoomResetBtn.textContent = `${currentZoom}%`;
+                });
+              }
+
+              if (zoomOutBtn) {
+                zoomOutBtn.addEventListener("click", (e: Event) => {
+                  e.stopPropagation();
+                  isFitMode = false;
+                  currentZoom = Math.max(35, currentZoom - 15);
+                  const targetWidth = Math.round(
+                    baseWidth * (currentZoom / 100),
+                  );
+                  importedSvg.style.width = `${targetWidth}px`;
+                  importedSvg.style.maxWidth = "none";
+                  importedSvg.style.minWidth = "0px";
+                  if (zoomResetBtn)
+                    zoomResetBtn.textContent = `${currentZoom}%`;
+                });
+              }
+
+              if (zoomResetBtn) {
+                zoomResetBtn.addEventListener("click", (e: Event) => {
+                  e.stopPropagation();
+                  isFitMode = false;
+                  currentZoom = 100;
+                  importedSvg.style.width = `${baseWidth}px`;
+                  importedSvg.style.maxWidth = "none";
+                  importedSvg.style.minWidth = "0px";
+                  zoomResetBtn.textContent = "100%";
+                });
+              }
+
+              if (fitToggleBtn) {
+                fitToggleBtn.addEventListener("click", (e: Event) => {
+                  e.stopPropagation();
+                  isFitMode = !isFitMode;
+                  currentZoom = 100;
+                  if (zoomResetBtn) zoomResetBtn.textContent = "100%";
+                  if (isFitMode) {
+                    importedSvg.style.width = "100%";
+                    importedSvg.style.maxWidth = "100%";
+                    importedSvg.style.minWidth = `${Math.min(baseWidth, 480)}px`;
+                  } else {
+                    importedSvg.style.width = `${baseWidth}px`;
+                    importedSvg.style.maxWidth = "none";
+                    importedSvg.style.minWidth = "0px";
+                  }
+                });
+              }
             } else {
               outputEl.innerHTML = svg;
             }
@@ -771,11 +885,15 @@ export class NoteFormatter {
             htmlLabels: false,
             theme: "default",
             fontFamily:
-              '"Anthropic Serif", "Copernicus", "华文书宋", "STShuSong", "华文宋体", "STSong", "华文中宋", "STZhongsong", serif',
+              '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif',
+            fontSize: 13,
             flowchart: {
               htmlLabels: false,
               useHtmlLabels: false,
               curve: "basis",
+              nodeSpacing: 45,
+              rankSpacing: 45,
+              padding: 12,
             },
             sequence: {
               useHtmlLabels: false,

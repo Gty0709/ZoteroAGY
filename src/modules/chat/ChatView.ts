@@ -1796,13 +1796,14 @@ export class ChatView {
       }
     }
 
-    // Hide rail if there are 0 or only 1 question turn (matching Cursor behavior)
-    if (userMessages.length <= 1) {
-      nav.style.display = "none";
+    // Hide rail only when there are 0 user questions (empty chat)
+    if (userMessages.length === 0) {
+      nav.classList.add("is-empty");
       return;
     }
 
-    nav.style.display = "flex";
+    // Always show rail whenever there is at least 1 turn
+    nav.classList.remove("is-empty");
 
     for (const item of userMessages) {
       const tick = el(doc, "div", "agy-turn-tick");
