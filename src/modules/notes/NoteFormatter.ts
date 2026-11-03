@@ -2,6 +2,7 @@ import { marked } from "marked";
 import katex from "katex";
 import { ContextItem } from "../../addon";
 import { debugLog } from "../../hooks";
+import { copyText } from "../../utils/clipboard";
 
 // Configure marked options
 marked.setOptions({
@@ -245,8 +246,7 @@ export class NoteFormatter {
             ?.querySelector("code");
           const codeText = codeEl?.textContent || "";
           try {
-            // @ts-ignore
-            await Zotero.Utilities?.Internal?.copyTextToClipboard?.(codeText);
+            await copyText(codeText);
             btn.textContent = "✅ 已复制";
             setTimeout(() => {
               btn.textContent = "📋 复制";
@@ -583,8 +583,7 @@ export class NoteFormatter {
         copyBtn.addEventListener("click", async (e: Event) => {
           e.stopPropagation();
           try {
-            // @ts-ignore
-            await Zotero.Utilities?.Internal?.copyTextToClipboard?.(code);
+            await copyText(code);
             copyBtn.textContent = "✅ 已复制";
             setTimeout(() => {
               copyBtn.textContent = "📋 复制";

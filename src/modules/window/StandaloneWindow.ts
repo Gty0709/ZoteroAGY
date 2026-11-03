@@ -27,8 +27,9 @@ export class StandaloneWindow {
       "resizable=yes",
       "scrollbars=no",
       "status=no",
-      keepOnTop ? "dependent=yes" : "dialog=no",
-      keepOnTop ? "alwaysRaised=yes,alwaysRaised" : "",
+      "dialog=no",
+      "dependent=no",
+      keepOnTop ? "alwaysRaised=yes" : "alwaysRaised=no",
     ]
       .filter(Boolean)
       .join(",");
@@ -37,14 +38,33 @@ export class StandaloneWindow {
       loadLock: (Zotero.Promise as any).defer(),
     };
 
-    // Open standalone XUL window
+    // Open standalone XUL window as independent top-level window (no parent to avoid Win32 owned-window lock)
     const mainWindow = Zotero.getMainWindow() as any;
-    const win = mainWindow.openDialog(
-      `chrome://${addon.data.config.addonRef}/content/standalone.xhtml`,
-      `${addon.data.config.addonRef}-standalone`,
-      features,
-      dialogData,
-    );
+    const Ci = (Components as any)?.interfaces;
+    const ww =
+      mainWindow?.Services?.ww ||
+      (typeof Services !== "undefined" ? (Services as any)?.ww : null) ||
+      (Components as any)?.classes?.["@mozilla.org/embedcomp/window-watcher;1"]?.getService?.(
+        Ci?.nsIWindowWatcher,
+      );
+
+    let win: Window;
+    if (ww?.openWindow) {
+      win = ww.openWindow(
+        null,
+        `chrome://${addon.data.config.addonRef}/content/standalone.xhtml`,
+        `${addon.data.config.addonRef}-standalone`,
+        features,
+        dialogData,
+      );
+    } else {
+      win = mainWindow.openDialog(
+        `chrome://${addon.data.config.addonRef}/content/standalone.xhtml`,
+        `${addon.data.config.addonRef}-standalone`,
+        features,
+        dialogData,
+      );
+    }
 
     this.win = win;
 
@@ -209,18 +229,45 @@ fi
       const psScript = `
 Add-Type -TypeDefinition @"
 using System;
+using System.Text;
 using System.Runtime.InteropServices;
 public class WinPin {
-    [DllImport("user32.dll", EntryPoint="FindWindowW", CharSet=CharSet.Unicode)]
-    public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+    [DllImport("user32.dll")]
+    public static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int GetWindowTextW(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+    [DllImport("user32.dll")]
+    public static extern bool IsWindowVisible(IntPtr hWnd);
     [DllImport("user32.dll")]
     public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr")]
+    private static extern IntPtr SetWindowLongPtr64(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+    [DllImport("user32.dll", EntryPoint = "SetWindowLong")]
+    private static extern int SetWindowLong32(IntPtr hWnd, int nIndex, int dwNewLong);
+    public static IntPtr SetOwner(IntPtr hWnd, IntPtr hOwner) {
+        if (IntPtr.Size == 8) return SetWindowLongPtr64(hWnd, -8, hOwner);
+        return new IntPtr(SetWindowLong32(hWnd, -8, hOwner.ToInt32()));
+    }
 }
 "@
-$h = [WinPin]::FindWindow($null, "${title}")
-if ($h -ne [IntPtr]::Zero) {
-    [WinPin]::SetWindowPos($h, [IntPtr](${onTop ? -1 : -2}), 0, 0, 0, 0, 3)
-}
+[WinPin]::EnumWindows({
+    param($hwnd, $lparam)
+    if ([WinPin]::IsWindowVisible($hwnd)) {
+        $sb = New-Object System.Text.StringBuilder 512
+        [WinPin]::GetWindowTextW($hwnd, $sb, 512) | Out-Null
+        $t = $sb.ToString()
+        if ($t.Contains("AGY") -and $t.Contains("智能助手")) {
+            if (${onTop ? '$true' : '$false'}) {
+                [WinPin]::SetWindowPos($hwnd, [IntPtr](-1), 0, 0, 0, 0, 19)
+            } else {
+                [WinPin]::SetOwner($hwnd, [IntPtr]::Zero) | Out-Null
+                [WinPin]::SetWindowPos($hwnd, [IntPtr](-2), 0, 0, 0, 0, 19)
+            }
+        }
+    }
+    return $true
+}, [IntPtr]::Zero)
 `;
       const proc = await Subprocess.call({
         command: "powershell.exe",
@@ -253,7 +300,7 @@ if ($h -ne [IntPtr]::Zero) {
       }
     } catch (_) {}
 
-    // 2. Query nsIAppWindow / nsIXULWindow interface
+    // 2. Query nsIAppWindow / nsIXULWindow interface and apply zLevel & flags
     try {
       const Ci = (Components as any)?.interfaces;
       let appWin: any = null;
@@ -274,6 +321,11 @@ if ($h -ne [IntPtr]::Zero) {
 
       if (appWin) {
         try {
+          const targetZ = onTop
+            ? (Ci?.nsIXULWindow?.highestZ ?? 4)
+            : (Ci?.nsIXULWindow?.normalZ ?? 2);
+          appWin.zLevel = targetZ;
+
           const CHROME_ALWAYS_ON_TOP =
             Ci?.nsIWebBrowserChrome?.CHROME_ALWAYS_ON_TOP ?? 524288;
           const CHROME_DEPENDENT =
@@ -290,7 +342,7 @@ if ($h -ne [IntPtr]::Zero) {
       }
     } catch (_) {}
 
-    // 3. Platform specific adjustments
+    // 3. Platform specific native adjustments
     if ((Zotero as any).isLinux) {
       const title = win.document?.title || "AGY 智能助手";
       StandaloneWindow.applyLinuxNativeAlwaysOnTop(title, onTop);

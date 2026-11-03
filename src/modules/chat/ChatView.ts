@@ -9,6 +9,7 @@ import { NoteFormatter } from "../notes/NoteFormatter";
 import { OAuthManager } from "../auth/OAuthManager";
 import { StandaloneWindow } from "../window/StandaloneWindow";
 import { PromptTemplates } from "../features/PromptTemplates";
+import { copyText, setupClipboardAndContextMenu } from "../../utils/clipboard";
 import { debugLog } from "../../hooks";
 
 const HTML_NS = "http://www.w3.org/1999/xhtml";
@@ -421,6 +422,9 @@ export class ChatView {
       historyList: drawerList,
       fontSizeLabel,
     };
+
+    // Setup clipboard handling (Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+A) and floating context menu
+    setupClipboardAndContextMenu(doc, panel, textarea);
 
     // Textarea input watcher to recalculate context meter in real time
     textarea.addEventListener("input", () => {
@@ -1420,8 +1424,7 @@ export class ChatView {
     // Copy
     const copyBtn = el(doc, "button", "agy-action-btn", "", "📋 复制");
     copyBtn.addEventListener("click", async () => {
-      // @ts-ignore
-      await Zotero.Utilities.Internal.copyTextToClipboard(answer);
+      await copyText(answer);
       copyBtn.textContent = "✅ 已复制";
       setTimeout(() => {
         copyBtn.textContent = "📋 复制";
