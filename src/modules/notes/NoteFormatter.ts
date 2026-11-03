@@ -754,13 +754,20 @@ export class NoteFormatter {
               svgEl.style.height = "auto";
 
               const importedSvg = doc.importNode(svgEl, true) as SVGSVGElement;
-              outputEl.appendChild(importedSvg);
+              const canvas = doc.createElementNS(
+                "http://www.w3.org/1999/xhtml",
+                "div",
+              ) as HTMLElement;
+              canvas.className = "agy-mermaid-canvas";
+              canvas.appendChild(importedSvg);
+              outputEl.appendChild(canvas);
 
               // Wire interactive zoom controls
               if (zoomInBtn) {
                 zoomInBtn.addEventListener("click", (e: Event) => {
                   e.stopPropagation();
                   isFitMode = false;
+                  canvas.style.width = "max-content";
                   currentZoom = Math.min(250, currentZoom + 15);
                   const targetWidth = Math.round(
                     baseWidth * (currentZoom / 100),
@@ -777,6 +784,7 @@ export class NoteFormatter {
                 zoomOutBtn.addEventListener("click", (e: Event) => {
                   e.stopPropagation();
                   isFitMode = false;
+                  canvas.style.width = "max-content";
                   currentZoom = Math.max(35, currentZoom - 15);
                   const targetWidth = Math.round(
                     baseWidth * (currentZoom / 100),
@@ -793,11 +801,13 @@ export class NoteFormatter {
                 zoomResetBtn.addEventListener("click", (e: Event) => {
                   e.stopPropagation();
                   isFitMode = false;
+                  canvas.style.width = "max-content";
                   currentZoom = 100;
                   importedSvg.style.width = `${baseWidth}px`;
                   importedSvg.style.maxWidth = "none";
                   importedSvg.style.minWidth = "0px";
                   zoomResetBtn.textContent = "100%";
+                  outputEl.scrollTop = 0;
                 });
               }
 
@@ -808,10 +818,12 @@ export class NoteFormatter {
                   currentZoom = 100;
                   if (zoomResetBtn) zoomResetBtn.textContent = "100%";
                   if (isFitMode) {
+                    canvas.style.width = "100%";
                     importedSvg.style.width = "100%";
                     importedSvg.style.maxWidth = "100%";
                     importedSvg.style.minWidth = `${Math.min(baseWidth, 480)}px`;
                   } else {
+                    canvas.style.width = "max-content";
                     importedSvg.style.width = `${baseWidth}px`;
                     importedSvg.style.maxWidth = "none";
                     importedSvg.style.minWidth = "0px";

@@ -731,15 +731,23 @@ collapsible-section[data-pane*="agy-chat"][open] {
 
 .agy-mermaid-output {
   padding: 16px !important;
-  display: flex !important;
-  justify-content: center !important;
-  align-items: center !important;
   overflow-x: auto !important;
   overflow-y: auto !important;
-  max-height: 560px !important;
+  max-height: 580px !important;
   min-height: 80px !important;
-  background: #ffffff !important;
+  background: var(--material-sidepanel-background, #ffffff) !important;
   position: relative !important;
+  box-sizing: border-box !important;
+  text-align: center !important;
+}
+
+.agy-mermaid-canvas {
+  min-width: 100% !important;
+  width: max-content !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
   box-sizing: border-box !important;
 }
 
@@ -750,6 +758,7 @@ collapsible-section[data-pane*="agy-chat"][open] {
   shape-rendering: geometricPrecision !important;
   text-rendering: geometricPrecision !important;
   transition: width 0.15s ease-out !important;
+  flex-shrink: 0 !important;
 }
 
 /* Mermaid Diagram Zoom Controls in Header */
